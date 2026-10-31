@@ -161,3 +161,13 @@ downloads/
 local_settings.py
 config.local.*
 *.env
+
+###############################################################################
+# Agent Configuration
+###############################################################################
+.agents
+.claude
+.openai
+.agents/*
+.claude/*
+.openai/*

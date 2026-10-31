@@ -200,7 +200,9 @@ The AI requires live location information to ground itinerary generation.
 
 ### Decision
 
-Use Overpass API.
+Use Overpass API as the primary provider. On provider failure only, use an
+optional configured Geoapify Places API fallback with the same normalized POI
+shape. Valid empty results do not trigger fallback.
 
 ### Rationale
 
@@ -214,10 +216,14 @@ Benefits:
 
 - Slower than commercial providers
 - Rate limits must be respected
+- Geoapify requires a key, has a limited free quota, and returns indexed OSM
+  data rather than exact live Overpass query results. Its data requires
+  Geoapify/OSM attribution, which is displayed in the UI.
 
 ### Outcome
 
-Provides live attraction data without additional costs.
+Provides live attraction data without mandatory additional costs and an
+opt-in free-tier availability fallback.
 
 ---
 
@@ -461,7 +467,7 @@ Future migration path remains open.
 
 # ADR-013
 
-## Prioritize Explainability Over Maximum Automation
+## Expose Tool Execution Without Revealing Private Model Reasoning
 
 ### Status
 
@@ -473,16 +479,49 @@ Educational and portfolio projects benefit from transparent behavior.
 
 ### Decision
 
-Expose:
+Expose an execution trace containing:
 
 - Tool execution
-- Retrieved POIs
-- Agent decisions
-- Validation results
+- Tool inputs and outcomes
+- Retrieved places
+- Final validation outcomes
 
 ### Outcome
 
-Improved debugging and demonstration value.
+Improved debugging and user visibility without presenting hidden model
+reasoning as an explanation.
+
+---
+
+# ADR-014
+
+## Use Explicit Key Priority and Bounded Credential-Safe Logs
+
+### Status
+
+Accepted
+
+### Decision
+
+Resolve API keys from the implementation's local `.env` first, then `.env` in
+the launch directory and its parents (nearest first), then the process
+environment. Use the first non-empty value. Remove sidebar key input,
+session overrides, Streamlit-secrets support, and standalone connection tests.
+Do not mutate the process environment while reading `.env`.
+
+Log application events to the terminal and an atomically written JSON history
+of the latest 200 events. Log only safe operation/error metadata; omit provider
+response bodies and exception tracebacks and redact credential-shaped values.
+Use application-only handlers to avoid enabling SDK or HTTP request logging.
+
+### Rationale
+
+Environment-only configuration keeps credentials out of browser sessions and
+avoids extra diagnostic API calls. Explicit `.env` precedence follows the
+requested deployment configuration.
+Bounded local logs preserve useful diagnostics without a logging service,
+unbounded disk growth, or new infrastructure. Terminal logging continues if
+the file cannot be written.
 
 ---
 

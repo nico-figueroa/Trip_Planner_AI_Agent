@@ -1,0 +1,381 @@
+You are acting as the lead AI engineer for this repository.
+
+Your objective is to transform this repository into a fully functional, production-oriented AI Trip Planner application that satisfies all documented requirements and acceptance criteria while minimizing implementation complexity, operational cost, token consumption, and future maintenance burden.
+
+IMPORTANT WORKFLOW RULES
+
+1. Treat PRODUCT_REQUIREMENTS.md as the source of truth.
+2. Before making changes, read and analyze:
+   - PRODUCT_REQUIREMENTS.md
+   - ARCHITECTURE.md
+   - DECISIONS.md
+   - TESTING_AND_EVALUATION_PLAN.md
+   - README.md
+3. Identify any contradictions between documents.
+4. Resolve documentation inconsistencies in favor of PRODUCT_REQUIREMENTS.md.
+5. Update documentation as needed to maintain consistency across the project.
+6. Do not create features that are not justified by documented requirements unless they significantly improve reliability, security, maintainability, or user experience.
+7. Favor practical implementations over theoretical completeness.
+
+====================================================
+PRIMARY OBJECTIVE
+====================================================
+
+Deliver a fully functional AI Trip Planner application that:
+
+- Runs successfully via:
+
+  streamlit run app.py
+
+- Uses OpenAI Responses API
+- Uses true OpenAI function calling
+- Uses Nominatim geocoding
+- Uses Overpass POI retrieval
+- Supports optional Wikivoyage retrieval
+- Generates structured itineraries
+- Displays itinerary locations on a PyDeck map
+- Persists itineraries
+- Persists feedback
+- Supports itinerary refinement
+- Provides agent execution visibility
+- Handles failures gracefully
+- Passes acceptance criteria defined in PRODUCT_REQUIREMENTS.md
+
+====================================================
+ARCHITECTURAL REQUIREMENTS
+====================================================
+
+Follow these principles:
+
+1. Keep architecture simple.
+2. Avoid premature abstraction.
+3. Avoid microservice-style complexity.
+4. Maintain modularity sufficient for future growth.
+5. Minimize file count where practical.
+6. Prefer clear code over clever code.
+7. Follow Python best practices.
+8. Favor deterministic workflows where possible.
+
+Recommended structure:
+
+app.py
+
+utils/
+    agent.py
+    tools.py
+    openai_client.py
+    persistence.py
+    validation.py
+    prompts.py
+    schemas.py
+
+data/
+    app_state.json
+    feedback.jsonl
+
+tests/
+
+Only introduce additional modules when they provide meaningful separation of concerns.
+
+====================================================
+AGENT IMPLEMENTATION REQUIREMENTS
+====================================================
+
+Implement a true agent workflow.
+
+The model must:
+
+1. Receive the user's planning request.
+2. Decide which tools to invoke.
+3. Execute tool calls.
+4. Consume tool outputs.
+5. Continue tool calling if needed.
+6. Generate a final itinerary.
+
+Use OpenAI Responses API function calling patterns.
+
+Implement:
+
+- Tool registry
+- Tool execution layer
+- Agent loop
+- Tool trace collection
+
+Expose tool execution trace in the UI.
+
+====================================================
+TOOLS TO IMPLEMENT
+====================================================
+
+Required tools:
+
+1. geocode_city()
+   - Nominatim API
+   - Proper User-Agent
+   - Rate-limit compliance
+
+2. find_nearby_pois()
+   - Overpass API
+   - Museums
+   - Parks
+   - Attractions
+   - Restaurants
+   - Landmarks
+
+3. get_destination_context()
+   - Wikivoyage retrieval
+   - Graceful fallback if unavailable
+
+====================================================
+STRUCTURED OUTPUT REQUIREMENTS
+====================================================
+
+Use structured JSON outputs.
+
+Strongly prefer:
+
+- Pydantic schemas
+- Output validation
+
+The final itinerary must include:
+
+destination
+overview
+travel_notes
+daily_plan
+
+Daily plan items should include:
+
+day
+title
+activities
+
+Reject malformed outputs and recover when possible.
+
+====================================================
+USER EXPERIENCE REQUIREMENTS
+====================================================
+
+Streamlit UI should include:
+
+- Destination input
+- Duration input
+- Interest input
+- Budget input (optional)
+- Generate itinerary button
+- Itinerary display
+- POI display
+- Map display
+- Agent trace display
+- Feedback section
+- Refinement section
+
+User should be able to:
+
+- Generate itinerary
+- Refine itinerary
+- Save itinerary
+- View previous itinerary state
+
+====================================================
+DATA PERSISTENCE REQUIREMENTS
+====================================================
+
+Persist:
+
+- Active itinerary
+- User feedback
+
+Use JSON/JSONL.
+
+Avoid adding databases.
+
+Implement file safety checks.
+
+Handle:
+
+- Missing files
+- Corrupt files
+
+gracefully.
+
+====================================================
+MAP REQUIREMENTS
+====================================================
+
+Implement PyDeck visualization.
+
+Display:
+
+- Destination center point
+- Retrieved POIs
+- Itinerary locations when available
+
+Handle empty datasets safely.
+
+====================================================
+SECURITY REQUIREMENTS
+====================================================
+
+API keys MUST NEVER:
+
+- Be hardcoded
+- Be logged
+- Be displayed in UI
+
+Support:
+
+- Environment variable
+- Streamlit secrets
+
+Review project for security issues before completion.
+
+====================================================
+RELIABILITY REQUIREMENTS
+====================================================
+
+Implement:
+
+- Request timeouts
+- Retry logic
+- Error handling
+- User-friendly error messages
+
+Use tenacity where appropriate.
+
+Handle:
+
+- OpenAI failures
+- Nominatim failures
+- Overpass failures
+- Wikivoyage failures
+
+without crashing the application.
+
+====================================================
+TOKEN OPTIMIZATION REQUIREMENTS
+====================================================
+
+This project should demonstrate good AI engineering practices.
+
+Optimize OpenAI consumption by:
+
+1. Keeping prompts concise.
+2. Avoiding repeated prompt construction.
+3. Reusing system prompts.
+4. Limiting context sent to models.
+5. Sending only relevant POIs.
+6. Avoiding unnecessary historical messages.
+7. Avoiding redundant API calls.
+8. Implementing response caching where beneficial.
+
+Where safe, prefer deterministic code over model calls.
+
+Use the model only for reasoning and itinerary generation.
+
+====================================================
+PERFORMANCE REQUIREMENTS
+====================================================
+
+Minimize:
+
+- OpenAI calls
+- Duplicate API requests
+- Repeated geocoding
+- Repeated retrieval
+
+Implement lightweight caching.
+
+Examples:
+
+- Streamlit cache
+- In-memory cache
+- Request memoization
+
+where appropriate.
+
+====================================================
+CODE QUALITY REQUIREMENTS
+====================================================
+
+Ensure:
+
+- Type hints
+- Docstrings
+- Descriptive names
+- Consistent formatting
+- No dead code
+- No unused imports
+- No duplicated logic
+
+Refactor aggressively if complexity grows unnecessarily.
+
+Apply DRY principles.
+
+====================================================
+TESTING REQUIREMENTS
+====================================================
+
+Create or complete tests for:
+
+- Validation
+- Geocoding
+- Persistence
+- Agent orchestration
+- Tool execution
+
+Add tests only where they provide meaningful coverage.
+
+Avoid test bloat.
+
+====================================================
+DOCUMENTATION REQUIREMENTS
+====================================================
+
+After implementation:
+
+1. Review all documentation.
+2. Ensure consistency across:
+   - README.md
+   - PRODUCT_REQUIREMENTS.md
+   - ARCHITECTURE.md
+   - DECISIONS.md
+   - TESTING_AND_EVALUATION_PLAN.md
+3. Update architecture diagrams if needed.
+4. Update setup instructions.
+5. Update dependencies.
+6. Ensure README reflects actual implementation.
+
+PRODUCT_REQUIREMENTS.md remains the authoritative source.
+
+====================================================
+FINAL VALIDATION CHECKLIST
+====================================================
+
+Before considering the project complete:
+
+□ Application launches successfully
+□ OpenAI Responses API works
+□ Function calling works
+□ Geocoding works
+□ POI retrieval works
+□ Optional Wikivoyage integration works
+□ Structured outputs validated
+□ Maps render correctly
+□ Persistence works
+□ Feedback works
+□ Refinement works
+□ Error handling works
+□ Documentation updated
+□ Tests pass
+□ Requirements satisfied
+□ No exposed secrets
+□ No major technical debt introduced
+
+====================================================
+DELIVERABLE
+====================================================
+
+Produce a working repository implementation rather than design recommendations.
+
+Prioritize working code, maintainability, reliability, security, cost efficiency, and compliance with PRODUCT_REQUIREMENTS.md.

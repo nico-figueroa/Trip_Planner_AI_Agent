@@ -87,6 +87,10 @@ Outputs:
 
 The system shall retrieve live Points of Interest using Overpass API.
 
+Overpass remains the primary provider. An optional Geoapify Places API fallback
+may supply nearby POIs when Overpass fails, using a locally configured API key
+and displaying the required provider/data-source attribution.
+
 Supported POI types:
 
 - Restaurants
@@ -164,7 +168,7 @@ Stored information:
 
 - Current itinerary
 - User preferences
-- API settings
+- Non-secret API settings (credentials are resolved server-side only)
 
 ---
 
@@ -248,8 +252,11 @@ API keys shall never be stored in source control.
 Supported mechanisms:
 
 - Environment variables
-- Session storage
-- Streamlit secrets
+- `.env` files (first `trip-planner/.env`, then launch directory and parents;
+  process environment is the fallback)
+
+API credentials shall not be entered or validated through a sidebar, stored
+in browser session state, or resolved from Streamlit secrets.
 
 ---
 
@@ -317,6 +324,7 @@ Required for production functionality:
 Optional:
 
 - Wikivoyage
+- Geoapify Places (availability fallback only; Overpass remains primary)
 
 ---
 

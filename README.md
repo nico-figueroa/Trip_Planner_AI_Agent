@@ -1,320 +1,137 @@
-# 🌍 Trip Planner AI Agent
+# AI Trip Planner
 
-An intelligent travel planning application that combines large language models, real-time geographic data, Retrieval-Augmented Generation (RAG), and agentic workflows to generate personalized travel itineraries.
+A Streamlit application that creates personalized, structured itineraries using
+the OpenAI Responses API and live OpenStreetMap data. The agent calls Nominatim
+to verify a destination, Overpass to retrieve nearby places, and optionally
+Wikivoyage for destination context. It displays the itinerary and locations on
+an interactive PyDeck map, saves plans and feedback as JSON/JSONL, and supports
+follow-up refinement.
 
-Built as the capstone project for the Codecademy AI Engineer Certification, this application demonstrates production-focused AI engineering practices including tool calling, external API integration, state persistence, interactive visualizations, feedback collection, and reliable AI output validation.
+## Features
 
----
+- Responses API function calling with a bounded agent loop and visible tool trace
+- Pydantic validation for structured itineraries and destination coordinates
+- Nominatim geocoding and Overpass search for attractions, museums, parks,
+  restaurants, cafes, and landmarks
+- Optional Geoapify Places fallback when Overpass fails
+- Optional Wikivoyage context retrieval; guide failures do not block planning
+- PyDeck map with destination, retrieved POIs, and matched itinerary stops
+- Active and saved itineraries, feedback, and refinement
+- Request timeouts, retry policies, rate limiting, and in-memory response caches
+- Credential-safe terminal logs plus the latest 200 events in `data/log.json`
 
-## 🚀 Project Overview
+## Requirements
 
-Trip Planner AI Agent helps travelers create customized itineraries by combining:
+- Python 3.14.6
+- Dependencies listed in `trip-planner/requirements.txt`
+- An OpenAI API key to generate or refine itineraries
 
-- OpenAI Responses API with function calling
-- OpenStreetMap geospatial services
-- Overpass live Points of Interest (POI) retrieval
-- Optional Wikivoyage Retrieval-Augmented Generation (RAG)
-- Interactive map visualization with PyDeck
-- Streamlit-based user interface
-- Persistent session and itinerary storage
-- User feedback collection and recommendation refinement
+## Setup
 
-Unlike simple chatbot applications, this project implements a true agent architecture capable of reasoning, selecting tools, gathering information, validating results, and generating structured travel recommendations.
+Run these commands from the repository root:
 
----
-
-## 🎯 Project Objectives
-
-This project was designed to demonstrate the following AI Engineering competencies:
-
-### Agentic AI Systems
-
-- OpenAI Responses API integration
-- Function calling and tool orchestration
-- Multi-step reasoning workflows
-- Agent execution tracing and debugging
-
-### Real-Time Data Integration
-
-- Nominatim geocoding
-- Overpass POI retrieval
-- Optional Wikivoyage RAG pipeline
-- API reliability and error recovery
-
-### Product Engineering
-
-- Streamlit web application
-- User session management
-- Persistent state storage
-- Feedback-driven recommendation improvements
-
-### Data Visualization
-
-- Interactive maps
-- POI plotting
-- Geographic itinerary visualization
-- Travel route exploration
-
----
-
-## 🏗️ System Architecture
-
-```text
-┌─────────────────────┐
-│     Streamlit UI    │
-└──────────┬──────────┘
-           │
-           ▼
-┌─────────────────────┐
-│   AI Travel Agent   │
-│ OpenAI Responses API│
-└──────────┬──────────┘
-           │
-           ▼
- ┌─────────┼─────────┐
- ▼         ▼         ▼
-
-Geocoder   POI Tool   Travel Guide Tool
-(Nominatim)(Overpass) (Wikivoyage RAG)
-
- └─────────┼─────────┘
-           ▼
-   Structured Itinerary
-           ▼
-      PyDeck Maps
-           ▼
- Persistent Storage
-```
-
----
-
-## ✨ Core Features
-
-### AI Agent
-
-- Natural language trip planning
-- Tool selection through function calling
-- Multi-step travel reasoning
-- Structured itinerary generation
-
-### Location Intelligence
-
-- Geocoding cities and destinations
-- Discovering nearby attractions
-- Retrieving restaurants and landmarks
-- Real-time POI recommendations
-
-### RAG Enhancement
-
-- Wikivoyage content retrieval
-- Travel-specific contextual grounding
-- Reduced hallucinations
-- Better destination awareness
-
-### Interactive Visualization
-
-- PyDeck-powered maps
-- Destination markers
-- Attraction plotting
-- Geographic itinerary display
-
-### Persistence
-
-- Session state management
-- Saved itineraries
-- User preference retention
-- Feedback history
-
-### Reliability
-
-- API request retries
-- Rate limiting protection
-- Structured validation
-- Graceful error handling
-
----
-
-## 🛠️ Technology Stack
-
-### AI & Machine Learning
-
-- OpenAI Responses API
-- Function Calling
-- Retrieval-Augmented Generation (RAG)
-- Prompt Engineering
-
-### Backend
-
-- Python 3.14
-- Requests
-- JSON Persistence
-
-### Frontend
-
-- Streamlit
-- PyDeck
-
-### Data Sources
-
-- Nominatim API
-- Overpass API
-- Wikivoyage API (Optional)
-
-### Data Processing
-
-- NumPy
-- Pandas
-- Scikit-Learn
-
----
-
-## 📂 Project Structure
-
-```text
-trip-planner/
-│
-├── app.py
-│
-├── data/
-│   ├── app_state.json
-│   └── feedback.jsonl
-│
-├── utils/
-│   ├── geocoding.py
-│   ├── poi_search.py
-│   ├── rag.py
-│   ├── persistence.py
-│   └── validation.py
-│
-├── README.md
-├── PRODUCT_REQUIREMENTS.md
-├── requirements.txt
-└── .env
-```
-
----
-
-## ⚙️ Installation
-
-### Clone Repository
-
-```bash
-git clone https://github.com/yourusername/trip-planner-ai-agent.git
-
-cd trip-planner-ai-agent
-```
-
-### Create Virtual Environment
-
-```bash
+```powershell
 python -m venv .venv
-```
-
-Windows:
-
-```bash
-source .venv/Scripts/activate
-```
-
-Linux/Mac:
-
-```bash
-source .venv/bin/activate
-```
-
-### Install Dependencies
-
-```bash
-pip install streamlit openai pydeck requests scikit-learn numpy pandas
-```
-
----
-
-## 🔑 API Configuration
-
-### Environment Variables
-
-Create a `.env` file:
-
-```env
-OPENAI_API_KEY=your_openai_api_key
-```
-
-Never commit secrets to source control.
-
-Add the following to `.gitignore`:
-
-```gitignore
-.env
-.streamlit/secrets.toml
-```
-
----
-
-## ▶️ Running the Application
-
-```bash
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r .\trip-planner\requirements.txt
+$env:OPENAI_API_KEY = "your-api-key"
 streamlit run app.py
 ```
 
-The application will launch in your browser by default.
+Alternatively, add `OPENAI_API_KEY` to `trip-planner/.env` (ignored by Git):
 
----
+```dotenv
+OPENAI_API_KEY = "your-api-key"
+```
 
-## 📸 Example Use Cases
+Key lookup uses **`trip-planner/.env` first, then `.env` in the launch directory
+and each parent directory (nearest first), then the process environment**.
+The first non-empty `OPENAI_API_KEY` value wins. Missing or blank values allow
+lookup to continue. This also applies to `GEOAPIFY_API_KEY`.
+There is no API-key sidebar, connection-test button, session override, or
+Streamlit-secrets lookup. Key values are never displayed or written to
+application state, feedback, or logs. Never commit `.env`.
 
-### Family Vacation
+The entry point is the root `app.py`; implementation and data files live under
+`trip-planner/`. Runtime state is stored in `trip-planner/data/app_state.json`
+and `trip-planner/data/feedback.jsonl`.
 
-> Plan a 4-day family trip to Seattle focused on museums, parks, and kid-friendly attractions.
+### Troubleshoot authentication
 
-### Cultural Exploration
+For HTTP 401, update `OPENAI_API_KEY` in the first matching `.env` file or the
+process environment. A stale `.env` value takes priority over a valid process
+environment value. Restart Streamlit after changing an environment variable.
+Authentication is checked during normal generation/refinement requests; no
+separate diagnostic API calls are made. HTTP 429 requires checking project
+billing/quota or waiting for a rate limit to clear.
 
-> Create a 3-day itinerary for Kyoto emphasizing temples, traditional architecture, and local cuisine.
+### Optional free-tier POI fallback
 
-### Food Tourism
+Overpass remains the primary POI provider. To enable Geoapify when Overpass
+fails, obtain a key at [Geoapify projects](https://myprojects.geoapify.com/) and
+configure `GEOAPIFY_API_KEY` in a searched `.env` file or your process
+environment. Never paste keys into chat or commit them. No additional dependency is
+needed.
 
-> Build a weekend itinerary around highly-rated restaurants and food markets in Portland.
+Geoapify supports the nearby museum, park, landmark/attraction, restaurant, and
+cafe searches used here. Its indexed OpenStreetMap data is not an exact
+replacement for live Overpass queries. The published free plan provides
+[3,000 credits/day](https://www.geoapify.com/pricing/); a Places request with
+limit 20 costs [one credit](https://www.geoapify.com/pricing-details/). Quotas
+and terms can change. The app shows Geoapify/OSM attribution with fallback data.
+A successful empty Overpass result does not trigger a billable fallback.
+If both providers fail, the trace reports POI retrieval as unavailable and the
+planner can continue without retrieved places.
 
----
+### Application logs
 
-## 🧠 AI Engineering Concepts Demonstrated
+Application events appear in the launch terminal and in
+`trip-planner/data/log.json`, a JSON array retaining the most recent **200 events**.
+Each event contains a UTC timestamp, level, logger, and sanitized message.
+Tool executions, validation outcomes, and safe API failure metadata are logged;
+keys, provider response bodies, and hidden model reasoning are not.
+Logs use atomic file replacement and are Git-ignored. A corrupt log is explicitly
+reported and reset; an unwritable log is reported on stderr without disabling
+terminal logging.
 
-This project showcases:
+## Run tests
 
-- Agentic workflows
-- OpenAI function calling
-- Tool orchestration
-- Retrieval-Augmented Generation
-- External API integration
-- Geospatial data processing
-- State management
-- User feedback loops
-- Output validation
-- Error handling and retry logic
-- Production AI architecture
+```powershell
+Push-Location .\trip-planner
+python -m pytest
+Pop-Location
+```
 
----
+Unit tests mock all external services. To manually verify live integrations,
+run the app with a valid API key and submit a short trip request. Nominatim is
+limited to one uncached request per second; avoid repeated live test runs.
 
-## 📈 Future Enhancements
+## Project layout
 
-- Multi-agent itinerary planning
-- Hotel integration
-- Flight search integration
-- Cost optimization recommendations
-- Personalized recommendation learning
-- Weather-aware itinerary generation
-- Vector database powered travel memory
-- LangGraph workflow orchestration
-- Multi-user authentication
+```text
+app.py                         Root Streamlit entry point
+trip-planner/
+  app.py                       Streamlit interface
+  requirements.txt             Runtime and test dependencies
+  data/                        JSON/JSONL persistence
+  tests/                       Offline unit tests
+  utils/
+    agent.py                   Planner workflow and final validation
+    config.py                  Service endpoints and model configuration
+    geocoding.py               Nominatim client and cache
+    logging_config.py          Safe terminal and bounded JSON logging
+    openai_agent.py            Responses API tool loop and trace
+    openai_client.py           API key resolution and client setup
+    output_parser.py           Structured itinerary parsing
+    persistence.py             Safe JSON/JSONL storage
+    poi_search.py              Overpass retrieval and optional Geoapify fallback
+    prompts.py                 System instructions and request payload
+    rag.py                     Optional Wikivoyage retrieval
+    schemas.py                 Pydantic itinerary schemas
+    tools.py                   Function registry and dispatch
+    validation.py              Request and itinerary validation
+```
 
----
-
-## 👨‍💻 Author
-
-Nicolas Figueroa (Nomadant)
-
-AI Engineer Certification Capstone Project
-
-Focused on demonstrating practical AI engineering skills through the design and implementation of a production-oriented intelligent travel planning platform.
-
----
+See [PRODUCT_REQUIREMENTS.md](./PRODUCT_REQUIREMENTS.md) for product
+acceptance criteria and [ARCHITECTURE.md](./ARCHITECTURE.md) for workflow
+details.

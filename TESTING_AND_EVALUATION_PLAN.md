@@ -1,610 +1,90 @@
 # Testing and Evaluation Plan
 
-# Trip Planner AI Agent
-
-Version: 1.0
-
----
-
-# 1. Purpose
-
-This document defines the testing and evaluation strategy for the Trip Planner AI Agent.
-
-The objectives are to:
-
-- Verify functional correctness
-- Validate AI agent behavior
-- Measure itinerary quality
-- Evaluate user experience
-- Confirm reliability of external integrations
-- Ensure production readiness
-
----
-
-# 2. Testing Strategy
-
-Testing will be conducted across five levels:
-
-1. Unit Testing
-2. Integration Testing
-3. Agent Workflow Testing
-4. User Acceptance Testing
-5. AI Evaluation and Quality Assessment
-
----
-
-# 3. Unit Testing
-
-## Objective
-
-Verify that individual modules function correctly in isolation.
-
----
-
-## Geocoding Module
-
-### Test Cases
-
-| Test ID | Description | Expected Outcome |
-|----------|-------------|------------------|
-| GEO-001 | Valid city entered | Coordinates returned |
-| GEO-002 | Ambiguous city entered | Multiple matches handled |
-| GEO-003 | Invalid destination | Error message returned |
-| GEO-004 | Empty input | Validation prevents request |
-
----
-
-## POI Retrieval Module
-
-### Test Cases
-
-| Test ID | Description | Expected Outcome |
-|----------|-------------|------------------|
-| POI-001 | Valid coordinates | POIs returned |
-| POI-002 | No nearby POIs | Empty response handled |
-| POI-003 | API timeout | Retry logic executes |
-| POI-004 | Invalid coordinates | Validation catches error |
-
----
-
-## Persistence Module
-
-### Test Cases
-
-| Test ID | Description | Expected Outcome |
-|----------|-------------|------------------|
-| PERS-001 | Save itinerary | JSON created |
-| PERS-002 | Load itinerary | Correct data restored |
-| PERS-003 | Corrupt file | Graceful recovery |
-| PERS-004 | Missing file | Default state initialized |
-
----
-
-## Feedback Module
-
-### Test Cases
-
-| Test ID | Description | Expected Outcome |
-|----------|-------------|------------------|
-| FB-001 | Submit rating | Rating saved |
-| FB-002 | Submit comment | Comment stored |
-| FB-003 | Empty feedback | Handled correctly |
-| FB-004 | Multiple submissions | All records preserved |
-
----
-
-# 4. Integration Testing
-
-## Objective
-
-Verify correct interaction between components.
-
----
-
-## OpenAI + Tool Calling
-
-### Test Case
-
-User requests:
-
-"Plan three days in Seattle focused on food and museums."
-
-Expected:
-
-1. Agent identifies destination
-2. Geocoding tool called
-3. POI search executed
-4. Results incorporated
-5. Structured itinerary returned
-
-Pass Criteria:
-
-- All tools execute correctly
-- Output includes retrieved locations
-- No hallucinated coordinates
-
----
-
-## OpenAI + Wikivoyage RAG
-
-### Test Case
-
-Destination:
-
-Kyoto
-
-Expected:
-
-- Wikivoyage information retrieved
-- Context included in itinerary
-- Source data influences recommendations
-
----
-
-## State Persistence
-
-### Test Case
-
-1. Generate itinerary
-2. Save state
-3. Restart application
-4. Reload itinerary
-
-Expected:
-
-Saved itinerary remains available.
-
----
-
-# 5. Agent Workflow Testing
-
-## Objective
-
-Validate reasoning and orchestration behavior.
-
----
-
-## Scenario AW-001
-
-Request:
-
-"Plan a family-friendly weekend in Portland."
-
-Expected Agent Actions:
-
-1. Interpret intent
-2. Identify family focus
-3. Retrieve attractions
-4. Prioritize kid-friendly locations
-5. Generate itinerary
-
-Pass Criteria:
-
-Recommendations align with request.
-
----
-
-## Scenario AW-002
-
-Request:
-
-"Show me museums only."
-
-Expected:
-
-- Agent filters POIs
-- Non-museum recommendations excluded
-
-Pass Criteria:
-
-100% museum-related results.
-
----
-
-## Scenario AW-003
-
-Request:
-
-"Update day two to include parks instead."
-
-Expected:
-
-- Existing itinerary loaded
-- Day two modified
-- Remaining days unchanged
-
-Pass Criteria:
-
-Successful refinement.
-
----
-
-# 6. AI Output Evaluation
-
-## Objective
-
-Assess quality of generated itineraries.
-
----
-
-# Evaluation Dimensions
-
-## Relevance
-
-Question:
-
-Does the itinerary match user intent?
-
-Scale:
-
-1–5
-
-| Score | Definition |
-|---------|-----------|
-| 1 | Completely unrelated |
-| 3 | Partially relevant |
-| 5 | Highly relevant |
-
-Target Average:
-
-≥ 4.0
-
----
-
-## Personalization
-
-Question:
-
-Were preferences incorporated?
-
-Examples:
-
-- Budget
-- Family-friendly
-- Museums
-- Food tourism
-
-Scale:
-
-1–5
-
-Target:
-
-≥ 4.0
-
----
-
-## Completeness
-
-Question:
-
-Does the itinerary contain all required sections?
-
-Required:
-
-- Overview
-- Daily Plan
-- Attractions
-- Dining
-- Notes
-
-Target:
-
-100%
-
----
-
-## Location Accuracy
-
-Question:
-
-Do recommended attractions exist?
-
-Method:
-
-Spot-check against retrieved POIs.
-
-Target:
-
-95%+
-
----
-
-## Hallucination Rate
-
-Question:
-
-How often does the model invent non-existent places?
-
-Formula:
-
-Hallucinated Locations / Total Recommendations
-
-Target:
-
-< 5%
-
----
-
-# 7. API Reliability Testing
-
----
-
-## Nominatim
-
-Test:
-
-50 consecutive geocoding requests
-
-Measure:
-
-- Success rate
-- Average latency
-- Error rate
-
-Target:
-
-95%+ successful responses
-
----
-
-## Overpass
-
-Test:
-
-50 POI searches
-
-Measure:
-
-- Success rate
-- Timeouts
-- Empty responses
-
-Target:
-
-90%+ successful responses
-
----
-
-## OpenAI
-
-Measure:
-
-- Successful completions
-- Function-call success rate
-- Retry rate
-
-Target:
-
-95%+
-
----
-
-# 8. User Experience Testing
-
-## Objective
-
-Evaluate usability and workflow efficiency.
-
----
-
-## Test Users
-
-Minimum:
-
-5 users
-
-Preferred:
-
-10+ users
-
----
-
-## User Tasks
-
-Task 1
-
-Generate itinerary.
-
-Task 2
-
-Modify itinerary.
-
-Task 3
-
-Save itinerary.
-
-Task 4
-
-Submit feedback.
-
----
-
-## Metrics
-
-### Task Completion Rate
-
-Formula:
-
-Completed Tasks / Attempted Tasks
-
-Target:
-
-≥ 90%
-
----
-
-### Time to Generate Itinerary
-
-Target:
-
-< 30 seconds
-
----
-
-### User Satisfaction
-
-Scale:
-
-1–5
-
-Target:
-
-≥ 4.0
-
----
-
-# 9. Performance Testing
-
----
-
-## Load Scenario 1
-
-10 itinerary requests
-
-Expected:
-
-No failures.
-
----
-
-## Load Scenario 2
-
-25 itinerary requests
-
-Expected:
-
-Stable response times.
-
----
-
-## Measure
-
-- Processing time
-- API latency
-- Memory usage
-- Application crashes
-
----
-
-# 10. Security Testing
-
-## API Keys
-
-Verify:
-
-- Keys never appear in logs
-- Keys never appear in UI outputs
-- Keys not stored in source code
-
-Pass Criteria:
-
-No exposed credentials.
-
----
-
-## Input Validation
-
-Test:
-
-- Empty prompts
-- Excessively long prompts
-- Special characters
-- Invalid destinations
-
-Expected:
-
-Safe handling.
-
----
-
-# 11. Acceptance Test Suite
-
-The project shall be considered complete when:
-
-✅ User submits travel request
-
-✅ OpenAI agent executes tool calls
-
-✅ Destination is geocoded
-
-✅ POIs are retrieved
-
-✅ Itinerary generated successfully
-
-✅ Interactive map displays correctly
-
-✅ State persistence functions
-
-✅ Feedback is stored
-
-✅ API failures handled gracefully
-
-✅ No hardcoded API secrets
-
-✅ System passes all critical tests
-
----
-
-# 12. Evaluation Dataset
-
-The following benchmark requests shall be used during testing:
-
-### Family Travel
-
-- Family weekend in Seattle
-
-### Food Tourism
-
-- Best restaurants in Portland
-
-### Culture
-
-- Three days in Kyoto
-
-### Outdoor Activities
-
-- National parks near Denver
-
-### Budget Travel
-
-- Affordable weekend in Chicago
-
-### Luxury Travel
-
-- Luxury vacation in Paris
-
-### Mixed Interests
-
-- Art museums and food in New York City
-
-Each benchmark should be scored using the evaluation framework defined above.
-
----
-
-# 13. Final Project Success Metrics
-
-| Metric | Target |
-|----------|---------|
-| Functional Tests Passed | 100% |
-| Relevance Score | ≥ 4.0 |
-| Personalization Score | ≥ 4.0 |
-| User Satisfaction | ≥ 4.0 |
-| Hallucination Rate | < 5% |
-| API Success Rate | ≥ 95% |
-| Task Completion Rate | ≥ 90% |
-| Average Response Time | < 30 sec |
-| Critical Security Findings | 0 |
-
----
-
-# 14. Future Evaluation Enhancements
-
-- Automated regression testing
-- LangSmith tracing and evaluation
-- LLM-as-a-Judge scoring
-- Human preference ranking
-- RAG retrieval precision metrics
-- Tool-call success analytics
-- OpenTelemetry monitoring
-- A/B testing of prompts
+## Strategy
+
+The default test suite is offline and deterministic. It mocks external HTTP
+services and the OpenAI Responses API so tests do not consume API quota or
+violate Nominatim's public-service rate limit.
+
+Run from the repository root:
+
+```powershell
+Push-Location .\trip-planner
+python -m pytest
+Pop-Location
+```
+
+## Unit coverage
+
+| Area | Coverage |
+|---|---|
+| Request validation | Missing/oversized input, duration boundaries, destination consistency |
+| Structured output | JSON recovery, Pydantic validation, Unicode destination matching, day count |
+| Nominatim | Address and coordinate mapping, User-Agent, empty results |
+| Overpass | Named node/way normalization, User-Agent, invalid coordinates |
+| Geoapify fallback | Overpass failure, valid empty primary response, missing key, both-provider failure, header authentication, normalization/cache |
+| Wikivoyage | Extract parsing and non-fatal retrieval failure |
+| Tool layer | Registered dispatch, unknown tools, invalid arguments |
+| Agent loop | Responses API function calls, call-output linkage, structured final output, tool errors |
+| Planner workflow | Verified destination, coordinates, POI results, prompt length |
+| Persistence | Save/load, missing and corrupt files, path safety, JSONL append |
+| OpenAI configuration | .env search order and precedence, blank/missing values, environment fallback, no Streamlit secrets, safe HTTP 401/429/400 guidance |
+| Logging | Exact 200-event bound, corrupt-log recovery, path safety, redaction, write failures, idempotent handlers |
+| Streamlit UI | Root entry point, saved itinerary/provider attribution, text-only map tooltips, absence of API-key sidebar |
+
+## Integration and manual acceptance
+
+With an OpenAI key configured, submit a short trip request and verify:
+
+1. The model invokes geocoding and POI retrieval through the Responses API.
+2. The trace shows each call, arguments, result or graceful error.
+3. The final JSON validates and includes destination, overview, travel notes,
+   and one activity list per requested day.
+4. The destination, retrieved POIs, and any matched itinerary stops appear on
+   the PyDeck map.
+5. Active and explicitly saved plans survive an app restart.
+6. Refinement updates the active plan, and feedback appends to JSONL.
+7. Missing keys, invalid destinations, provider failures, and malformed model
+   output produce user-facing errors without displaying secrets.
+8. Generation and refinement use `OPENAI_API_KEY` from the documented `.env`
+   search order or process environment; invalid keys produce safe HTTP 401
+   guidance. No key-entry or connection-test controls are displayed.
+9. With Geoapify configured and Overpass unavailable, normalized POIs are
+   displayed with Geoapify/OSM attribution and source markers in the trace.
+10. Tool and validation events appear in both terminal output and
+    `trip-planner/data/log.json`, without credentials or provider response bodies.
+
+Live integration checks are manual and should be run sparingly. Nominatim
+requests are limited to one uncached request per 1.1 seconds; use a single
+destination per manual check. Wikivoyage is optional and its absence must not
+block itinerary generation.
+
+### Verified live check
+
+A previous minimal OpenAI Responses connection check succeeded using the local `.env`
+configuration. A one-day Seattle itinerary also completed with real OpenAI
+function calls and schema validation: Nominatim resolved the destination,
+Overpass failed, and the configured Geoapify fallback returned 19 usable places.
+This single end-to-end run took 10.4 seconds. It verifies that integration path,
+not an availability SLA or a general latency guarantee. Tests never reproduce
+these paid/quota-consuming calls automatically.
+The standalone connection-check function and UI were subsequently removed;
+normal planning remains the live integration path.
+
+## Quality evaluation
+
+Score benchmark itineraries from 1–5 for relevance, personalization, and
+practicality. Spot-check named venues against retrieved POIs. Track completion
+rate and user feedback over representative requests; do not make automated
+claims about hallucination rates or a 30-second latency target from unit tests.
+
+## Security checks
+
+- Confirm no API key is committed, written to persistence, logged, or rendered
+  in plain text.
+- Confirm no API-key input is present and credentials are not read from browser
+  session state or Streamlit secrets, or added to saved plans or feedback.
+- Confirm persistence rejects paths outside the app data directory.
+- Confirm request and provider errors do not render response bodies or headers.
+- Confirm map tooltips use plain text rather than interpolating untrusted POI
+  names or categories into HTML.

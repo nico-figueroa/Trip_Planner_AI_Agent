@@ -80,6 +80,7 @@ desktop.ini
 
 data/app_state.json
 data/feedback.jsonl
+**/data/log.json
 
 ###############################################################################
 # Local Databases

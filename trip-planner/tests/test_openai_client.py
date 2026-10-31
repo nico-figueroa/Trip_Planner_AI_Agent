@@ -68,14 +68,14 @@ def test_missing_key_does_not_use_streamlit_secrets(isolated_config, monkeypatch
         openai_client.get_client()
 
 
-def test_client_uses_resolved_key_and_existing_timeout(monkeypatch):
+def test_client_uses_resolved_key_and_long_itinerary_timeout(monkeypatch):
     calls = []
     monkeypatch.setattr(openai_client, "resolve_secret", lambda name: ("test-key", ".env"))
     monkeypatch.setattr(openai_client, "OpenAI", lambda **kwargs: calls.append(kwargs))
 
     openai_client.get_client()
 
-    assert calls == [{"api_key": "test-key", "timeout": 30.0, "max_retries": 1}]
+    assert calls == [{"api_key": "test-key", "timeout": 90.0, "max_retries": 1}]
 
 
 @pytest.mark.parametrize(

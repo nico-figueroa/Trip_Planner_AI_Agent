@@ -57,6 +57,37 @@ def test_trip_planner_returns_coordinates_and_tool_results():
     assert len(result["itinerary"]["daily_plan"]) == 3
 
 
+def test_trip_planner_merges_regional_bases_and_places():
+    def geocode(city, latitude, longitude):
+        return {
+            "tool": "geocode_city",
+            "success": True,
+            "result": {"latitude": latitude, "longitude": longitude, "city": city},
+        }
+
+    def places(*names):
+        return {
+            "tool": "find_nearby_pois",
+            "success": True,
+            "result": [
+                {"name": name, "latitude": 47.6, "longitude": -122.3} for name in names
+            ],
+        }
+
+    trace = [
+        geocode("Seattle", 47.6, -122.3),
+        geocode("Tacoma", 47.25, -122.44),
+        geocode("Seattle", 47.6, -122.3),
+        places("Museum", "Park"),
+        places("Park", "Waterfront"),
+    ]
+
+    result = TripPlannerAgent(agent=FakeAgent(trace)).generate_trip_plan("Seattle", 3)
+
+    assert result["stops"] == [{"name": "Tacoma", "latitude": 47.25, "longitude": -122.44}]
+    assert [poi["name"] for poi in result["pois"]] == ["Museum", "Park", "Waterfront"]
+
+
 def test_trip_planner_requires_verified_destination():
     planner = TripPlannerAgent(agent=FakeAgent([]))
 
@@ -69,3 +100,77 @@ def test_trip_planner_rejects_long_prompts_before_model_call():
 
     with pytest.raises(ValueError, match="Additional request"):
         planner.generate_trip_plan("Seattle", 3, additional_request="x" * 1001)
+
+
+SEATTLE_TRACE = [
+    {
+        "tool": "geocode_city",
+        "success": True,
+        "result": {"latitude": 47.6, "longitude": -122.3, "city": "Seattle"},
+    }
+]
+
+
+class ScriptedAgent:
+    def __init__(self, *itineraries):
+        self.itineraries = list(itineraries)
+        self.requests = []
+
+    def run(self, request):
+        self.requests.append(request)
+        return self.itineraries.pop(0), list(SEATTLE_TRACE)
+
+
+def commitment_check(result):
+    return next(
+        entry["result"]
+        for entry in result["trace"]
+        if entry["tool"] == "verify_fixed_commitments"
+    )
+
+
+def itinerary_with_day_two(activity):
+    plan = valid_itinerary()
+    plan.daily_plan[1].activities = [activity]
+    return plan
+
+
+def test_misplaced_fixed_commitment_triggers_one_model_repair():
+    from datetime import date
+
+    agent = ScriptedAgent(
+        valid_itinerary(),
+        itinerary_with_day_two("Christmas dinner with family in Escazu"),
+    )
+
+    result = TripPlannerAgent(agent=agent).generate_trip_plan(
+        "Seattle",
+        3,
+        additional_request="Dec 24 Escazu christmas dinner",
+        start_date=date(2026, 12, 23),
+    )
+
+    assert len(agent.requests) == 2
+    assert "Day 2: Dec 24 Escazu christmas dinner" in agent.requests[1]
+    assert result["itinerary"]["daily_plan"][1]["activities"] == [
+        "Christmas dinner with family in Escazu"
+    ]
+    assert commitment_check(result)["repaired_by_model"] is True
+
+
+def test_ignored_fixed_commitment_is_inserted_on_its_day():
+    from datetime import date
+
+    agent = ScriptedAgent(valid_itinerary(), valid_itinerary())
+
+    result = TripPlannerAgent(agent=agent).generate_trip_plan(
+        "Seattle",
+        3,
+        additional_request="Dec 24 Escazu christmas dinner",
+        start_date=date(2026, 12, 23),
+    )
+
+    assert result["itinerary"]["daily_plan"][1]["activities"][0] == (
+        "Fixed commitment: Dec 24 Escazu christmas dinner"
+    )
+    assert commitment_check(result)["inserted_by_planner"] == [2]

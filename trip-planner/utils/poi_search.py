@@ -1,4 +1,4 @@
-"""Overpass POI retrieval with an optional Geoapify fallback."""
+"""Geoapify Places POI retrieval."""
 
 from __future__ import annotations
 
@@ -13,14 +13,16 @@ from typing import Any
 import requests
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
-from utils.config import GEOAPIFY_URL, OVERPASS_URL, USER_AGENT, resolve_secret
+from utils.config import GEOAPIFY_URL, USER_AGENT, resolve_secret
 
 logger = logging.getLogger(__name__)
 MAX_POIS = 20
 GEOAPIFY_CATEGORIES = {
     "entertainment.museum": "Museum",
+    "national_park": "National park",
     "leisure.park": "Park",
     "tourism.sights": "Landmark",
+    "tourism.attraction": "Attraction",
     "catering.restaurant": "Restaurant",
     "catering.cafe": "Cafe",
 }
@@ -59,89 +61,29 @@ def _validate_search(latitude: float, longitude: float, radius: int) -> tuple[fl
     return latitude, longitude
 
 
-def _category(tags: dict[str, Any]) -> str:
-    for key in ("tourism", "amenity", "leisure", "historic"):
-        if tags.get(key):
-            return str(tags[key]).replace("_", " ").title()
-    return "Point of interest"
-
-
-@retry(
-    retry=retry_if_exception(_is_retryable),
-    wait=wait_exponential(multiplier=1, min=1, max=2),
-    stop=stop_after_attempt(2),
-    reraise=True,
-)
-def _request_overpass(query: str) -> dict[str, Any]:
-    _respect_rate_limit()
-    response = requests.post(
-        OVERPASS_URL,
-        data={"data": query},
-        headers={"User-Agent": USER_AGENT},
-        timeout=(5, 20),
+def _category(categories: Any) -> str:
+    if not isinstance(categories, list):
+        return "Attraction"
+    return next(
+        (
+            label
+            for key, label in GEOAPIFY_CATEGORIES.items()
+            if any(
+                isinstance(value, str) and (value == key or value.startswith(f"{key}."))
+                for value in categories
+            )
+        ),
+        "Attraction",
     )
-    response.raise_for_status()
-    return response.json()
 
 
-@lru_cache(maxsize=64)
-def _cached_pois(latitude: float, longitude: float, radius: int) -> tuple[dict[str, Any], ...]:
-    query = f"""
-    [out:json][timeout:15];
-    (
-      nwr(around:{radius},{latitude},{longitude})["tourism"~"^(attraction|museum|gallery|theme_park|zoo|aquarium)$"];
-      nwr(around:{radius},{latitude},{longitude})["amenity"~"^(restaurant|cafe)$"];
-      nwr(around:{radius},{latitude},{longitude})["leisure"~"^(park|garden)$"];
-      nwr(around:{radius},{latitude},{longitude})["historic"];
-    );
-    out center {MAX_POIS};
-    """
-    data = _request_overpass(query)
-    if not isinstance(data, dict):
-        raise ValueError("Overpass returned an invalid response.")
-    elements = data.get("elements", [])
-    if not isinstance(elements, list):
-        raise ValueError("Overpass returned an invalid element list.")
-    pois: list[dict[str, Any]] = []
-    seen: set[tuple[str, float, float]] = set()
-
-    for element in elements:
-        if not isinstance(element, dict):
-            continue
-        tags = element.get("tags", {})
-        if not isinstance(tags, dict):
-            continue
-        name = tags.get("name")
-        center = element.get("center", {})
-        if not isinstance(center, dict):
-            center = {}
-        poi_latitude = element.get("lat", center.get("lat"))
-        poi_longitude = element.get("lon", center.get("lon"))
-        if not name or poi_latitude is None or poi_longitude is None:
-            continue
-
-        try:
-            point = (str(name), float(poi_latitude), float(poi_longitude))
-        except (TypeError, ValueError):
-            continue
-        if not -90 <= point[1] <= 90 or not -180 <= point[2] <= 180:
-            continue
-        if point in seen:
-            continue
-        seen.add(point)
-        pois.append(
-            {
-                "name": point[0],
-                "category": _category(tags),
-                "latitude": point[1],
-                "longitude": point[2],
-                "source": "Overpass",
-            }
-        )
-        if len(pois) == MAX_POIS:
-            break
-
-    return tuple(pois)
+def _address(properties: dict[str, Any], name: str) -> str:
+    """Return the street/locality part of a Geoapify address without the place name."""
+    line1 = str(properties.get("address_line1") or "").strip()
+    line2 = str(properties.get("address_line2") or "").strip()
+    if line1 and line1 != name:
+        return ", ".join(part for part in (line1, line2) if part)
+    return line2 or str(properties.get("formatted") or "").strip()
 
 
 @retry(
@@ -178,7 +120,7 @@ def _request_geoapify(
 
 
 @lru_cache(maxsize=64)
-def _cached_geoapify_pois(
+def _cached_pois(
     latitude: float,
     longitude: float,
     radius: int,
@@ -206,28 +148,13 @@ def _cached_geoapify_pois(
         if not -90 <= point[1] <= 90 or not -180 <= point[2] <= 180 or point in seen:
             continue
         seen.add(point)
-        categories = properties.get("categories", [])
-        if not isinstance(categories, list):
-            categories = []
-        category = next(
-            (
-                label
-                for key, label in GEOAPIFY_CATEGORIES.items()
-                if any(
-                    isinstance(value, str)
-                    and (value == key or value.startswith(f"{key}."))
-                    for value in categories
-                )
-            ),
-            "Attraction",
-        )
         pois.append(
             {
                 "name": point[0],
-                "category": category,
+                "category": _category(properties.get("categories")),
+                "address": _address(properties, point[0]),
                 "latitude": point[1],
                 "longitude": point[2],
-                "source": "Geoapify",
             }
         )
         if len(pois) == MAX_POIS:
@@ -240,23 +167,15 @@ def find_nearby_pois(
     longitude: float,
     radius: int = 3000,
 ) -> list[dict[str, Any]]:
-    """Use Overpass first; fall back on provider failure when Geoapify is configured."""
+    """Return named places near a coordinate from the Geoapify Places API."""
     latitude, longitude = _validate_search(latitude, longitude, radius)
+    api_key, _ = resolve_secret("GEOAPIFY_API_KEY")
+    if not api_key:
+        logger.warning("Nearby place search skipped: GEOAPIFY_API_KEY is not configured.")
+        raise ValueError("Nearby place search requires GEOAPIFY_API_KEY.")
     try:
-        pois = _cached_pois(latitude, longitude, radius)
-    except (requests.RequestException, ValueError) as error:
-        logger.warning("Overpass request failed (%s).", type(error).__name__)
-        api_key, _ = resolve_secret("GEOAPIFY_API_KEY")
-        if not api_key:
-            raise
-        logger.info("Using the configured Geoapify fallback for nearby places.")
-        try:
-            pois = _cached_geoapify_pois(latitude, longitude, radius, api_key)
-        except (requests.RequestException, ValueError) as fallback_error:
-            logger.warning(
-                "Geoapify fallback failed (%s).", type(fallback_error).__name__
-            )
-            raise ValueError(
-                "Nearby place search is unavailable from both Overpass and Geoapify."
-            ) from fallback_error
+        pois = _cached_pois(latitude, longitude, radius, api_key)
+    except requests.RequestException as error:
+        logger.warning("Geoapify request failed (%s).", type(error).__name__)
+        raise ValueError("Nearby place search is temporarily unavailable.") from error
     return copy.deepcopy(list(pois))

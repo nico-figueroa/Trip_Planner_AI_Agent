@@ -1,22 +1,30 @@
 # AI Trip Planner
 
 A Streamlit application that creates personalized, structured itineraries using
-the OpenAI Responses API and live OpenStreetMap data. The agent calls Nominatim
-to verify a destination, Overpass to retrieve nearby places, and optionally
-Wikivoyage for destination context. It displays the itinerary and locations on
-an interactive PyDeck map, saves plans and feedback as JSON/JSONL, and supports
-follow-up refinement.
+the OpenAI Responses API and live OpenStreetMap-based data. The agent calls
+Nominatim to verify a destination, the Geoapify Places API to retrieve nearby
+places, and optionally Wikivoyage for destination context. It displays the
+itinerary and locations on an interactive PyDeck map, exports itineraries as
+PDF, saves plans and feedback as JSON/JSONL, and supports follow-up refinement.
 
 ## Features
 
 - Responses API function calling with a bounded agent loop and visible tool trace
+- Long, multi-region trips: the agent geocodes up to four regional bases; when
+  its tool budget is reached it finishes the itinerary with the data gathered
 - Pydantic validation for structured itineraries and destination coordinates
-- Nominatim geocoding and Overpass search for attractions, museums, parks,
-  restaurants, cafes, and landmarks
-- Optional Geoapify Places fallback when Overpass fails
+- Nominatim geocoding and Geoapify search for attractions, museums, parks,
+  national parks, restaurants, cafes, and landmarks, listed with addresses
 - Optional Wikivoyage context retrieval; guide failures do not block planning
-- PyDeck map with destination, retrieved POIs, and matched itinerary stops
-- Active and saved itineraries, feedback, and refinement
+- PyDeck map with destination, regional bases, retrieved POIs, and matched
+  itinerary stops, auto-zoomed to fit every point
+- Optional start date: each day shows its calendar date and holidays are
+  labeled; dated commitments in the additional request (for example
+  "December 24 San Jose christmas dinner") are pinned to the matching day in
+  code, the route is planned around them with stated driving times, and the
+  result is verified (repaired or inserted if missing); refinement keeps them
+- Rotating, lighthearted progress messages while a plan is generated or refined
+- Active and saved itineraries, PDF export, feedback, and refinement
 - Request timeouts, retry policies, rate limiting, and in-memory response caches
 - Credential-safe terminal logs plus the latest 200 events in `data/log.json`
 
@@ -25,6 +33,8 @@ follow-up refinement.
 - Python 3.14.6
 - Dependencies listed in `trip-planner/requirements.txt`
 - An OpenAI API key to generate or refine itineraries
+- A free Geoapify API key for nearby places (planning continues without it,
+  but no places are retrieved)
 
 ## Setup
 
@@ -38,10 +48,11 @@ $env:OPENAI_API_KEY = "your-api-key"
 streamlit run app.py
 ```
 
-Alternatively, add `OPENAI_API_KEY` to `trip-planner/.env` (ignored by Git):
+Alternatively, add the keys to `trip-planner/.env` (ignored by Git):
 
 ```dotenv
 OPENAI_API_KEY = "your-api-key"
+GEOAPIFY_API_KEY = "your-geoapify-key"
 ```
 
 Key lookup uses **`trip-planner/.env` first, then `.env` in the launch directory
@@ -65,23 +76,22 @@ Authentication is checked during normal generation/refinement requests; no
 separate diagnostic API calls are made. HTTP 429 requires checking project
 billing/quota or waiting for a rate limit to clear.
 
-### Optional free-tier POI fallback
+### Nearby places (Geoapify)
 
-Overpass remains the primary POI provider. To enable Geoapify when Overpass
-fails, obtain a key at [Geoapify projects](https://myprojects.geoapify.com/) and
-configure `GEOAPIFY_API_KEY` in a searched `.env` file or your process
-environment. Never paste keys into chat or commit them. No additional dependency is
-needed.
+Nearby places come from the Geoapify Places API, which replaced Overpass after
+repeated Overpass timeouts. Obtain a free key at
+[Geoapify projects](https://myprojects.geoapify.com/) and configure
+`GEOAPIFY_API_KEY` in a searched `.env` file or your process environment. Never
+paste keys into chat or commit them.
 
-Geoapify supports the nearby museum, park, landmark/attraction, restaurant, and
-cafe searches used here. Its indexed OpenStreetMap data is not an exact
-replacement for live Overpass queries. The published free plan provides
+Geoapify returns OpenStreetMap-based museums, parks, national parks, landmarks,
+attractions, restaurants, and cafes, including a street address shown in the
+Nearby places table and PDF. The published free plan provides
 [3,000 credits/day](https://www.geoapify.com/pricing/); a Places request with
 limit 20 costs [one credit](https://www.geoapify.com/pricing-details/). Quotas
-and terms can change. The app shows Geoapify/OSM attribution with fallback data.
-A successful empty Overpass result does not trigger a billable fallback.
-If both providers fail, the trace reports POI retrieval as unavailable and the
-planner can continue without retrieved places.
+and terms can change. The app shows Geoapify/OSM attribution with place data.
+If the key is missing or Geoapify fails, the trace reports POI retrieval as
+unavailable and the planner continues without retrieved places.
 
 ### Application logs
 
@@ -123,8 +133,9 @@ trip-planner/
     openai_agent.py            Responses API tool loop and trace
     openai_client.py           API key resolution and client setup
     output_parser.py           Structured itinerary parsing
+    pdf_report.py              Itinerary PDF export (fpdf2)
     persistence.py             Safe JSON/JSONL storage
-    poi_search.py              Overpass retrieval and optional Geoapify fallback
+    poi_search.py              Geoapify Places retrieval with addresses
     prompts.py                 System instructions and request payload
     rag.py                     Optional Wikivoyage retrieval
     schemas.py                 Pydantic itinerary schemas

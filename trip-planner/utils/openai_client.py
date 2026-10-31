@@ -16,6 +16,7 @@ from openai import (
 from utils.config import resolve_secret
 
 logger = logging.getLogger(__name__)
+OPENAI_TIMEOUT_SECONDS = 90.0
 
 
 class MissingAPIKeyError(RuntimeError):
@@ -67,4 +68,5 @@ def get_client() -> OpenAI:
         raise MissingAPIKeyError(
             "Configure OPENAI_API_KEY in a .env file or the process environment."
         )
-    return OpenAI(api_key=api_key, timeout=30.0, max_retries=1)
+    # Long itineraries (for example, 19+ days) can take over 30 seconds to generate.
+    return OpenAI(api_key=api_key, timeout=OPENAI_TIMEOUT_SECONDS, max_retries=1)

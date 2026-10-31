@@ -162,16 +162,15 @@ Use OpenStreetMap services.
 
 Components:
 
-- Nominatim
-- Overpass
+- Nominatim (geocoding)
+- Geoapify Places for POIs (OpenStreetMap-based; see ADR-005)
 
 ### Rationale
 
 Benefits:
 
-- No API costs
-- No vendor lock-in
-- Open ecosystem
+- No API costs within free tiers
+- Open data ecosystem
 - Educational value
 
 ### Alternatives Considered
@@ -188,42 +187,45 @@ Reduced operating costs and simpler deployment.
 
 # ADR-005
 
-## Use Overpass API for Points of Interest Retrieval
+## Use Geoapify Places for Points of Interest Retrieval
 
 ### Status
 
-Accepted
+Accepted (supersedes the earlier Overpass-primary decision)
 
 ### Context
 
 The AI requires live location information to ground itinerary generation.
+Overpass was originally primary, with Geoapify as a failure fallback, but public
+Overpass endpoints repeatedly returned HTTP errors or ~40-second timeouts. A
+19-day Costa Rica request spent about three minutes waiting on Overpass before
+falling back on every call.
 
 ### Decision
 
-Use Overpass API as the primary provider. On provider failure only, use an
-optional configured Geoapify Places API fallback with the same normalized POI
-shape. Valid empty results do not trigger fallback.
+Use the Geoapify Places API as the only POI provider and remove Overpass.
+Requests use a POST body with the key in an `x-api-key` header, a 3 km circle
+filter, and a limit of 20. Results are normalized to name, category, address,
+latitude, and longitude.
 
 ### Rationale
 
 Benefits:
 
-- Direct access to OpenStreetMap data
-- No API key required
-- Flexible query language
+- Fast, consistent responses (about 1 second)
+- OpenStreetMap-based data with formatted street addresses
+- Free tier of 3,000 credits/day; one request costs one credit
 
 ### Tradeoffs
 
-- Slower than commercial providers
-- Rate limits must be respected
-- Geoapify requires a key, has a limited free quota, and returns indexed OSM
-  data rather than exact live Overpass query results. Its data requires
-  Geoapify/OSM attribution, which is displayed in the UI.
+- Requires a `GEOAPIFY_API_KEY`; without it, POI retrieval is unavailable and
+  plans continue without retrieved places.
+- Indexed data instead of arbitrary live Overpass queries.
+- Geoapify/OpenStreetMap attribution is required and displayed in the UI and PDF.
 
 ### Outcome
 
-Provides live attraction data without mandatory additional costs and an
-opt-in free-tier availability fallback.
+Reliable, fast place retrieval with addresses at no cost within the free tier.
 
 ---
 

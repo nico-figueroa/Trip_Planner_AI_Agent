@@ -107,6 +107,71 @@ def test_agent_reports_tool_errors_to_model(monkeypatch):
     assert json.loads(responses.requests[1]["input"][0]["output"])["error"]
 
 
+def test_agent_forces_final_itinerary_when_tool_budget_is_reached(monkeypatch):
+    many_calls = [
+        function_call("geocode_city", f"c{index}", {"city": f"Town {index}"})
+        for index in range(openai_agent.MAX_TOOL_CALLS + 2)
+    ]
+    responses = FakeResponses(
+        [response("r1", many_calls), response("r2", [], json.dumps(ITINERARY))]
+    )
+    executed = []
+    monkeypatch.setattr(
+        openai_agent,
+        "execute_tool",
+        lambda name, arguments: executed.append(arguments) or {"latitude": 1.0},
+    )
+    agent = OpenAITripAgent(client=SimpleNamespace(responses=responses))
+
+    itinerary, trace = agent.run("Plan nineteen days in Costa Rica.")
+
+    assert itinerary.destination == "Seattle"
+    assert len(executed) == len(trace) == openai_agent.MAX_TOOL_CALLS
+    final_request = responses.requests[1]
+    assert final_request["tool_choice"] == "none"
+    assert len(final_request["input"]) == len(many_calls)
+    assert json.loads(final_request["input"][-1]["output"]) == {
+        "error": openai_agent.SKIPPED_TOOL_MESSAGE
+    }
+
+
+def test_agent_forces_final_itinerary_after_max_rounds(monkeypatch):
+    rounds = [
+        response(f"r{index}", [function_call("geocode_city", f"c{index}", {"city": "X"})])
+        for index in range(openai_agent.MAX_TOOL_ROUNDS)
+    ]
+    responses = FakeResponses([*rounds, response("final", [], json.dumps(ITINERARY))])
+    monkeypatch.setattr(openai_agent, "execute_tool", lambda name, arguments: {})
+    agent = OpenAITripAgent(client=SimpleNamespace(responses=responses))
+
+    agent.run("Plan three days in Seattle.")
+
+    assert [request["tool_choice"] for request in responses.requests] == [
+        *["auto"] * openai_agent.MAX_TOOL_ROUNDS,
+        "none",
+    ]
+
+
+def test_poi_addresses_are_not_sent_back_to_model(monkeypatch):
+    responses = FakeResponses(
+        [
+            response(
+                "r1",
+                [function_call("find_nearby_pois", "c1", {"latitude": 1, "longitude": 2})],
+            ),
+            response("r2", [], json.dumps(ITINERARY)),
+        ]
+    )
+    poi = {"name": "Museum", "address": "1 Main Street", "latitude": 1, "longitude": 2}
+    monkeypatch.setattr(openai_agent, "execute_tool", lambda name, arguments: [poi])
+    agent = OpenAITripAgent(client=SimpleNamespace(responses=responses))
+
+    _, trace = agent.run("Plan three days in Seattle.")
+
+    assert trace[0]["result"][0]["address"] == "1 Main Street"
+    assert "address" not in json.loads(responses.requests[1]["input"][0]["output"])[0]
+
+
 def test_agent_rejects_malformed_final_itinerary():
     responses = FakeResponses([response("r1", [], "not json")])
     agent = OpenAITripAgent(client=SimpleNamespace(responses=responses))

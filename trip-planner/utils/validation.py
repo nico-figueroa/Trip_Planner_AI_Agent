@@ -15,6 +15,7 @@ def validate_trip_request(
     budget: str = "",
     travel_style: str = "",
     additional_request: str = "",
+    refinement: str = "",
 ) -> list[str]:
     """Return user-correctable request errors."""
     errors = []
@@ -28,6 +29,7 @@ def validate_trip_request(
         ("Budget", budget, 200),
         ("Travel style", travel_style, 200),
         ("Additional request", additional_request, 1000),
+        ("Refinement", refinement, 1000),
     ):
         if not isinstance(value, str):
             errors.append(f"{label} must be text.")

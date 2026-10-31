@@ -18,7 +18,19 @@ from utils.schemas import Itinerary
 from utils.tools import TOOL_DEFINITIONS, execute_tool
 
 logger = logging.getLogger(__name__)
-MAX_TOOL_ROUNDS = 5
+MAX_TOOL_ROUNDS = 6
+MAX_TOOL_CALLS = 16
+SKIPPED_TOOL_MESSAGE = (
+    "Tool budget reached. Build the final itinerary from the data already gathered."
+)
+RESPONSE_FORMAT = {
+    "format": {
+        "type": "json_schema",
+        "name": "trip_itinerary",
+        "schema": Itinerary.model_json_schema(),
+        "strict": True,
+    }
+}
 
 
 class PlanningError(RuntimeError):
@@ -37,6 +49,18 @@ def _tool_error_message(tool_name: str, error: Exception) -> str:
     return "The requested tool could not be completed."
 
 
+def _model_payload(tool_name: str, result: Any) -> Any:
+    """Drop display-only fields so tool outputs stay small in the model context."""
+    if tool_name == "find_nearby_pois" and isinstance(result, list):
+        return [
+            {key: value for key, value in item.items() if key != "address"}
+            if isinstance(item, dict)
+            else item
+            for item in result
+        ]
+    return result
+
+
 class OpenAITripAgent:
     """Run a bounded Responses API tool loop and validate the final itinerary."""
 
@@ -44,32 +68,67 @@ class OpenAITripAgent:
         self.client = client if client is not None else get_client()
         self.model = model
 
+    def _create_response(self, tool_choice: str, **request: Any) -> Any:
+        return self.client.responses.create(
+            model=self.model,
+            tools=TOOL_DEFINITIONS,
+            tool_choice=tool_choice,
+            text=RESPONSE_FORMAT,
+            **request,
+        )
+
+    def _execute_call(self, call: Any, trace: list[dict[str, Any]]) -> Any:
+        arguments: dict[str, Any] = {}
+        try:
+            arguments = json.loads(call.arguments)
+            result = execute_tool(call.name, arguments)
+        except (
+            DestinationNotFoundError,
+            requests.RequestException,
+            TypeError,
+            ValueError,
+        ) as error:
+            message = _tool_error_message(call.name, error)
+            trace.append(
+                {
+                    "tool": call.name,
+                    "arguments": arguments,
+                    "success": False,
+                    "error": message,
+                    "error_type": type(error).__name__,
+                }
+            )
+            logger.warning("Agent tool failed: %s (%s).", call.name, type(error).__name__)
+            return {"error": message}
+
+        trace.append(
+            {"tool": call.name, "arguments": arguments, "success": True, "result": result}
+        )
+        logger.info("Agent tool completed: %s.", call.name)
+        return _model_payload(call.name, result)
+
     def run(
         self,
         trip_request: str,
     ) -> tuple[Itinerary, list[dict[str, Any]]]:
-        """Return a validated itinerary and user-visible tool execution trace."""
+        """Return a validated itinerary and user-visible tool execution trace.
+
+        When the round or call budget is reached, remaining calls are skipped and
+        the model is asked to finish with the data it already has.
+        """
         trace: list[dict[str, Any]] = []
+        executed_calls = 0
+        tool_choice = "auto"
         try:
-            response = self.client.responses.create(
-                model=self.model,
+            response = self._create_response(
+                tool_choice,
                 input=[
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": trip_request},
                 ],
-                tools=TOOL_DEFINITIONS,
-                tool_choice="auto",
-                text={
-                    "format": {
-                        "type": "json_schema",
-                        "name": "trip_itinerary",
-                        "schema": Itinerary.model_json_schema(),
-                        "strict": True,
-                    }
-                },
             )
 
-            for _ in range(MAX_TOOL_ROUNDS + 1):
+            for round_number in range(1, MAX_TOOL_ROUNDS + 2):
                 tool_calls = [
                     item
                     for item in response.output
@@ -81,74 +140,42 @@ class OpenAITripAgent:
                     except ValueError:
                         logger.warning("Structured itinerary output failed validation.")
                         raise
-                    logger.info("Agent returned a structured itinerary.")
+                    logger.info(
+                        "Agent returned a structured itinerary after %d tool calls.",
+                        executed_calls,
+                    )
                     return itinerary, trace
-
-                if len(trace) + len(tool_calls) > MAX_TOOL_ROUNDS * 3:
-                    raise PlanningError("The planner exceeded its tool execution limit.")
+                if tool_choice == "none":
+                    break
 
                 tool_outputs = []
                 for call in tool_calls:
-                    arguments: dict[str, Any] = {}
-                    try:
-                        arguments = json.loads(call.arguments)
-                        result = execute_tool(call.name, arguments)
-                        trace.append(
-                            {
-                                "tool": call.name,
-                                "arguments": arguments,
-                                "success": True,
-                                "result": result,
-                            }
-                        )
-                        logger.info("Agent tool completed: %s.", call.name)
-                    except (
-                        DestinationNotFoundError,
-                        requests.RequestException,
-                        TypeError,
-                        ValueError,
-                    ) as error:
-                        message = _tool_error_message(call.name, error)
-                        trace.append(
-                            {
-                                "tool": call.name,
-                                "arguments": arguments,
-                                "success": False,
-                                "error": message,
-                                "error_type": type(error).__name__,
-                            }
-                        )
-                        logger.warning(
-                            "Agent tool failed: %s (%s).",
-                            call.name,
-                            type(error).__name__,
-                        )
-                        result = {"error": message}
-
+                    if executed_calls < MAX_TOOL_CALLS:
+                        executed_calls += 1
+                        output = self._execute_call(call, trace)
+                    else:
+                        output = {"error": SKIPPED_TOOL_MESSAGE}
                     tool_outputs.append(
                         {
                             "type": "function_call_output",
                             "call_id": call.call_id,
-                            "output": json.dumps(result, ensure_ascii=False),
+                            "output": json.dumps(output, ensure_ascii=False),
                         }
                     )
 
-                response = self.client.responses.create(
-                    model=self.model,
+                if round_number >= MAX_TOOL_ROUNDS or executed_calls >= MAX_TOOL_CALLS:
+                    tool_choice = "none"
+                    logger.info(
+                        "Tool budget reached after %d calls; requesting the final itinerary.",
+                        executed_calls,
+                    )
+                response = self._create_response(
+                    tool_choice,
                     previous_response_id=response.id,
                     input=tool_outputs,
-                    tools=TOOL_DEFINITIONS,
-                    tool_choice="auto",
-                    text={
-                        "format": {
-                            "type": "json_schema",
-                            "name": "trip_itinerary",
-                            "schema": Itinerary.model_json_schema(),
-                            "strict": True,
-                        }
-                    },
                 )
         except APIError as error:
             raise PlanningError(describe_openai_error(error)) from error
 
+        logger.warning("Agent kept requesting tools after the final itinerary request.")
         raise PlanningError("The planner could not complete its tool workflow.")

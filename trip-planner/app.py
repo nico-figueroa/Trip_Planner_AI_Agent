@@ -4,9 +4,14 @@ from __future__ import annotations
 
 import copy
 import logging
+import math
+import random
+import re
 import uuid
-from datetime import datetime, timezone
-from typing import Any
+from concurrent.futures import ThreadPoolExecutor, wait
+from datetime import date, datetime, timezone
+from functools import partial
+from typing import Any, Callable, TypeVar
 
 import pydeck as pdk
 import streamlit as st
@@ -18,11 +23,36 @@ from utils.openai_client import (
     MissingAPIKeyError,
     get_api_key,
 )
+from utils.pdf_report import build_itinerary_pdf, day_heading
 from utils.persistence import append_feedback, load_state, save_state
 
 configure_logging()
 logger = logging.getLogger("utils.app")
 MAX_SAVED_ITINERARIES = 20
+PROGRESS_INTERVAL_SECONDS = 2.5
+PROGRESS_MESSAGES = (
+    "Calculating distances between gelato stops...",
+    "Checking the weather (and packing an umbrella, just in case)...",
+    "Asking for directions. We are definitely not lost...",
+    "Consulting with the local tour guides...",
+    "Folding the map the wrong way, twice...",
+    "Negotiating with the hotel breakfast buffet...",
+    "Teaching the GPS some local slang...",
+    "Counting the steps to the nearest viewpoint...",
+    "Bribing the pigeons for insider tips...",
+    "Taste-testing the street food, purely for research...",
+    "Double-checking the time zones...",
+    "Practicing how to ask where the restroom is...",
+    "Rolling socks to save suitcase space...",
+    "Checking whether the museums have air conditioning...",
+    "Looking for the shortcut the locals use...",
+    "Comparing sunset spots with a very serious face...",
+    "Reading every travel blog on the internet...",
+    "Charging the camera batteries...",
+    "Arguing with the itinerary about nap time...",
+    "Convincing the souvenir shops to stay open late...",
+)
+T = TypeVar("T")
 
 st.set_page_config(
     page_title="AI Trip Planner",
@@ -33,8 +63,71 @@ st.set_page_config(
 
 def _format_plan_label(plan: dict[str, Any]) -> str:
     destination = str(plan.get("destination") or "Trip")
-    created = str(plan.get("created_at", ""))[:10]
-    return f"{destination} — {created or 'saved plan'}"
+    duration = plan.get("duration")
+    days = f"{duration} days, " if duration else ""
+    created = str(plan.get("created_at", ""))[:16].replace("T", " ")
+    return f"{destination} ({days}{created or 'saved plan'})"
+
+
+def _plan_key(plan: dict[str, Any], position: int) -> str:
+    """Return a stable selector value so a stale selection never shows another plan."""
+    return str(plan.get("id") or f"plan-{position}")
+
+
+def _plan_start_date(plan: dict[str, Any]) -> date | None:
+    try:
+        return date.fromisoformat(str(plan.get("start_date")))
+    except ValueError:
+        return None
+
+
+def _run_with_progress(task: Callable[[], T]) -> T:
+    """Run a blocking task in a worker thread while rotating playful status messages.
+
+    The worker never calls Streamlit; only this script thread updates the page.
+    """
+    placeholder = st.empty()
+    index = random.randrange(len(PROGRESS_MESSAGES))
+    # One status element is relabeled in place; recreating spinners caused flicker.
+    status = placeholder.status(PROGRESS_MESSAGES[index], state="running")
+    try:
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(task)
+            while True:
+                done, _ = wait([future], timeout=PROGRESS_INTERVAL_SECONDS)
+                if done:
+                    return future.result()
+                index = (index + 1) % len(PROGRESS_MESSAGES)
+                status.update(label=PROGRESS_MESSAGES[index])
+    finally:
+        placeholder.empty()
+
+
+def _pdf_file_name(plan: dict[str, Any]) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", str(plan.get("destination", "")).casefold())
+    return f"{slug.strip('-') or 'trip'}-itinerary.pdf"
+
+
+def _map_view(points: list[dict[str, Any]]) -> pdk.ViewState:
+    """Center the map and choose the closest zoom that keeps every point visible."""
+    latitudes = [point["latitude"] for point in points]
+    longitudes = [point["longitude"] for point in points]
+    center_latitude = (min(latitudes) + max(latitudes)) / 2
+    center_longitude = (min(longitudes) + max(longitudes)) / 2
+    if len(points) == 1:
+        return pdk.ViewState(latitude=center_latitude, longitude=center_longitude, zoom=12)
+    # Web Mercator: one 256 px world tile spans 360 degrees at zoom 0. Fit the
+    # bounding box inside roughly 600 x 380 px so markers are not on the edge.
+    longitude_span = max(max(longitudes) - min(longitudes), 1e-4)
+    latitude_span = max(max(latitudes) - min(latitudes), 1e-4)
+    cos_latitude = max(math.cos(math.radians(center_latitude)), 0.1)
+    scale = min(600 / longitude_span, 380 * cos_latitude / latitude_span)
+    zoom = max(1.0, min(14.0, math.log2(scale * 360 / 256)))
+    return pdk.ViewState(
+        latitude=center_latitude,
+        longitude=center_longitude,
+        zoom=round(zoom, 2),
+    )
 
 
 def _render_map(plan: dict[str, Any]) -> None:
@@ -76,6 +169,26 @@ def _render_map(plan: dict[str, Any]) -> None:
             "color": [230, 82, 70],
         }
     ]
+    stops = plan.get("stops")
+    for stop in stops if isinstance(stops, list) else []:
+        if not isinstance(stop, dict):
+            continue
+        try:
+            stop_latitude = float(stop.get("latitude"))
+            stop_longitude = float(stop.get("longitude"))
+        except (TypeError, ValueError):
+            continue
+        if -90 <= stop_latitude <= 90 and -180 <= stop_longitude <= 180:
+            points.append(
+                {
+                    "name": str(stop.get("name") or "Regional base"),
+                    "category": "Regional base",
+                    "latitude": stop_latitude,
+                    "longitude": stop_longitude,
+                    "radius": 180,
+                    "color": [176, 58, 146],
+                }
+            )
     for poi in plan.get("pois", []):
         if not isinstance(poi, dict):
             continue
@@ -103,11 +216,6 @@ def _render_map(plan: dict[str, Any]) -> None:
             }
         )
 
-    points = [
-        point
-        for point in points
-        if point["latitude"] is not None and point["longitude"] is not None
-    ]
     layer = pdk.Layer(
         "ScatterplotLayer",
         data=points,
@@ -120,12 +228,7 @@ def _render_map(plan: dict[str, Any]) -> None:
     )
     deck = pdk.Deck(
         layers=[layer],
-        initial_view_state=pdk.ViewState(
-            latitude=latitude,
-            longitude=longitude,
-            zoom=12,
-            pitch=20,
-        ),
+        initial_view_state=_map_view(points),
         map_style="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
         tooltip={"text": "{name}\n{category}"},
     )
@@ -147,7 +250,7 @@ def _render_plan(plan: dict[str, Any]) -> None:
         if not isinstance(day, dict):
             continue
         with st.expander(
-            f"Day {day.get('day', '?')}: {day.get('title', 'Activities')}",
+            day_heading(plan, day),
             expanded=day.get("day") == 1,
         ):
             activities = day.get("activities", [])
@@ -167,18 +270,25 @@ def _render_plan(plan: dict[str, Any]) -> None:
     if not isinstance(pois, list):
         pois = []
     st.subheader("Nearby places")
-    if pois:
+    places = [
+        {
+            "Name": poi.get("name", ""),
+            "Category": poi.get("category", ""),
+            "Address": poi.get("address") or "Address not available",
+        }
+        for poi in pois
+        if isinstance(poi, dict)
+    ]
+    if places:
         st.dataframe(
-            pois,
+            places,
             hide_index=True,
-            alt="Retrieved points of interest near the destination",
+            alt="Retrieved points of interest with their addresses",
         )
-        if any(isinstance(poi, dict) and poi.get("source") == "Geoapify" for poi in pois):
-            st.caption(
-                "Overpass was unavailable. Powered by "
-                "[Geoapify](https://www.geoapify.com/) using "
-                "[OpenStreetMap](https://www.openstreetmap.org/copyright) data."
-            )
+        st.caption(
+            "Places powered by [Geoapify](https://www.geoapify.com/) using "
+            "[OpenStreetMap](https://www.openstreetmap.org/copyright) data."
+        )
     else:
         st.info("No nearby places were returned. The map still shows the destination.")
 
@@ -222,7 +332,7 @@ st.markdown(
 
 with st.form("trip_request"):
     st.subheader("Plan a trip")
-    first_row = st.columns([2, 1])
+    first_row = st.columns([2, 1, 1])
     destination = first_row[0].text_input("Destination", placeholder="Kyoto, Japan")
     duration = first_row[1].number_input(
         "Duration (days)",
@@ -230,6 +340,11 @@ with st.form("trip_request"):
         max_value=30,
         value=3,
         step=1,
+    )
+    start_date = first_row[2].date_input(
+        "Start date (optional)",
+        value=None,
+        help="Lets the planner place date-specific plans on the right day.",
     )
     interests = st.text_input(
         "Interests",
@@ -249,7 +364,7 @@ with st.form("trip_request"):
     )
     additional_request = st.text_area(
         "Additional request",
-        placeholder="Plan a weekend, avoid long walks, include local food...",
+        placeholder="Dec 22: birthday party in San Jose; avoid long walks...",
         height=90,
         max_chars=1000,
     )
@@ -264,27 +379,33 @@ if generate:
         )
     else:
         try:
-            with st.spinner("Checking the destination and planning your trip..."):
-                result = TripPlannerAgent().generate_trip_plan(
+            result = _run_with_progress(
+                partial(
+                    TripPlannerAgent().generate_trip_plan,
                     destination=destination,
                     duration=int(duration),
                     interests=interests,
                     budget=budget,
                     travel_style=travel_style,
                     additional_request=additional_request,
+                    start_date=start_date,
                 )
-                result["id"] = uuid.uuid4().hex
-                result["created_at"] = datetime.now(timezone.utc).isoformat()
-                state = copy.deepcopy(st.session_state["planner_state"])
-                state["active_itinerary"] = result
-                st.session_state["planner_state"] = state
-                st.session_state["current_plan"] = result
-                save_state(state)
+            )
+            result["id"] = uuid.uuid4().hex
+            result["created_at"] = datetime.now(timezone.utc).isoformat()
+            state = copy.deepcopy(st.session_state["planner_state"])
+            state["active_itinerary"] = result
+            st.session_state["planner_state"] = state
+            st.session_state["current_plan"] = result
+            # Show the new plan even if the selector previously pointed at a saved one.
+            st.session_state["selected_plan"] = result["id"]
+            save_state(state)
             st.success("Itinerary generated and saved as the active plan.")
         except (MissingAPIKeyError, PlanningError, ValueError, OSError) as error:
             logger.warning(
-                "Trip planning request could not be completed (%s).",
+                "Trip planning request could not be completed (%s): %s",
                 type(error).__name__,
+                error,
             )
             st.error(str(error))
 
@@ -302,24 +423,41 @@ plan_options.extend(
 
 displayed_plan: dict[str, Any] | None = st.session_state.get("current_plan")
 if plan_options:
-    selected_index = st.selectbox(
+    plans_by_key = {
+        _plan_key(plan, position): plan for position, plan in enumerate(plan_options)
+    }
+    if st.session_state.get("selected_plan") not in plans_by_key:
+        st.session_state.pop("selected_plan", None)
+    selected_key = st.selectbox(
         "Current and saved itineraries",
-        options=list(range(len(plan_options))),
+        options=list(plans_by_key),
         index=0,
-        format_func=lambda index: _format_plan_label(plan_options[index]),
+        format_func=lambda key: _format_plan_label(plans_by_key[key]),
         key="selected_plan",
     )
-    displayed_plan = plan_options[selected_index]
+    displayed_plan = plans_by_key[selected_key]
 
 if displayed_plan:
     st.divider()
     _render_plan(displayed_plan)
 
-    if st.button(
-        "Save itinerary",
-        key="save_itinerary",
-        icon=":material/bookmark_add:",
-    ):
+    with st.container(horizontal=True):
+        save_clicked = st.button(
+            "Save itinerary",
+            key="save_itinerary",
+            icon=":material/bookmark_add:",
+        )
+        st.download_button(
+            "Save as PDF",
+            data=partial(build_itinerary_pdf, copy.deepcopy(displayed_plan)),
+            file_name=_pdf_file_name(displayed_plan),
+            mime="application/pdf",
+            key="save_itinerary_pdf",
+            icon=":material/picture_as_pdf:",
+            on_click="ignore",
+        )
+
+    if save_clicked:
         state = copy.deepcopy(st.session_state["planner_state"])
         saved = state.setdefault("saved_itineraries", [])
         if not isinstance(saved, list):
@@ -364,28 +502,34 @@ if displayed_plan:
         else:
             try:
                 current = displayed_plan.get("itinerary", {})
-                with st.spinner("Updating your itinerary..."):
-                    result = TripPlannerAgent().generate_trip_plan(
+                result = _run_with_progress(
+                    partial(
+                        TripPlannerAgent().generate_trip_plan,
                         destination=displayed_plan.get("destination", destination),
                         duration=int(displayed_plan.get("duration", duration)),
                         interests=displayed_plan.get("interests", interests),
                         budget=displayed_plan.get("budget", budget),
                         travel_style=displayed_plan.get("travel_style", travel_style),
-                        additional_request=refinement,
+                        additional_request=displayed_plan.get("additional_request", ""),
                         existing_itinerary=current,
+                        start_date=_plan_start_date(displayed_plan),
+                        refinement=refinement,
                     )
-                    result["id"] = uuid.uuid4().hex
-                    result["created_at"] = datetime.now(timezone.utc).isoformat()
-                    state = copy.deepcopy(st.session_state["planner_state"])
-                    state["active_itinerary"] = result
-                    st.session_state["planner_state"] = state
-                    st.session_state["current_plan"] = result
-                    save_state(state)
-                    st.session_state.pop("selected_plan", None)
+                )
+                result["id"] = uuid.uuid4().hex
+                result["created_at"] = datetime.now(timezone.utc).isoformat()
+                state = copy.deepcopy(st.session_state["planner_state"])
+                state["active_itinerary"] = result
+                st.session_state["planner_state"] = state
+                st.session_state["current_plan"] = result
+                save_state(state)
+                st.session_state.pop("selected_plan", None)
                 st.success("Itinerary refined and saved as the active plan.")
                 st.rerun()
             except (MissingAPIKeyError, PlanningError, ValueError, OSError) as error:
-                logger.warning("Itinerary refinement failed (%s).", type(error).__name__)
+                logger.warning(
+                    "Itinerary refinement failed (%s): %s", type(error).__name__, error
+                )
                 st.error(str(error))
 
     with st.form("trip_feedback"):

@@ -25,8 +25,8 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "type": "function",
         "name": "find_nearby_pois",
         "description": (
-            "Retrieve nearby named museums, parks, attractions, restaurants, cafes, "
-            "and landmarks from OpenStreetMap. Use coordinates returned by geocode_city."
+            "Retrieve up to 20 named museums, parks, attractions, restaurants, cafes, "
+            "and landmarks within 3 km of a coordinate returned by geocode_city."
         ),
         "parameters": {
             "type": "object",

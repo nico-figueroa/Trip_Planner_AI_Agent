@@ -9,7 +9,6 @@ DOTENV_FILE = Path(__file__).resolve().parents[1] / ".env"
 
 USER_AGENT = "TripPlannerAI/1.0 (https://github.com/nico-figueroa/Trip_Planner_AI_Agent)"
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
-OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 GEOAPIFY_URL = "https://api.geoapify.com/v2/places"
 WIKIVOYAGE_API_URL = "https://en.wikivoyage.org/w/api.php"
 OPENAI_MODEL = "gpt-4.1-mini"

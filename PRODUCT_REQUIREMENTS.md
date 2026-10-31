@@ -85,11 +85,15 @@ Outputs:
 
 ## FR-005 POI Retrieval
 
-The system shall retrieve live Points of Interest using Overpass API.
+The system shall retrieve live Points of Interest using the Geoapify Places API
+(OpenStreetMap-based data), authenticated with a locally configured
+`GEOAPIFY_API_KEY` and displaying the required Geoapify/OpenStreetMap
+attribution. Overpass was removed after repeated timeouts made planning slow and
+unreliable. Each place includes its name, category, address, and coordinates;
+the Nearby places table shows name, category, and address.
 
-Overpass remains the primary provider. An optional Geoapify Places API fallback
-may supply nearby POIs when Overpass fails, using a locally configured API key
-and displaying the required provider/data-source attribution.
+For multi-region trips, POIs retrieved around each geocoded regional base are
+merged and deduplicated.
 
 Supported POI types:
 
@@ -120,6 +124,20 @@ The system shall generate recommendations based on:
 - User interests
 - Travel style
 - Budget (if provided)
+- Optional start date and additional requests
+
+Requirements in the additional request are hard constraints. When a start date
+is given, the application computes each day's calendar date in code, labels
+widely observed holidays (Christmas Eve/Day, New Year's Eve/Day), and pins every
+additional-request clause that names a single trip date (for example
+"December 24 San Jose christmas dinner", whether separated by commas,
+semicolons, or new lines) to the matching day number. It also gives the model
+the free days between commitments with a travel radius (short gaps stay within
+about 1.5 hours of the commitment towns; distant regions only in gaps of 3+
+days), and requires stated driving times for every travel leg. After
+generation, the planner verifies each commitment appears on its day; if not, it
+requests one model repair and, as a last resort, adds the commitment to that
+day itself. The UI and PDF show the date beside each day.
 
 ---
 
@@ -155,7 +173,8 @@ The platform shall display itinerary locations using PyDeck.
 The map shall:
 
 - Center on destination
-- Show itinerary locations
+- Show itinerary locations and regional bases
+- Fit the initial zoom so every plotted location is visible
 - Support zoom and pan
 
 ---
@@ -167,6 +186,8 @@ The application shall maintain session state while the user remains active.
 Stored information:
 
 - Current itinerary
+- Selected itinerary (by plan ID; a newly generated or refined plan is always
+  shown immediately)
 - User preferences
 - Non-secret API settings (credentials are resolved server-side only)
 
@@ -183,6 +204,9 @@ Files:
 
 - app_state.json
 - feedback.jsonl
+
+Users shall also be able to download the displayed itinerary as a PDF report
+(overview, daily plan, travel notes, and nearby places with addresses).
 
 ---
 
@@ -206,13 +230,24 @@ Examples:
 - Reduce walking distance
 - Replace attractions
 
+Refinement keeps the original additional request and start date, so fixed
+commitments still apply after a change.
+
 ---
 
 # 4. Non-Functional Requirements
 
 ## NFR-001 Performance
 
-Typical itinerary generation shall complete within 30 seconds.
+Typical itinerary generation shall complete within 30 seconds. Long multi-region
+trips (for example, 19 days across several regions) may take longer; the agent
+tool budget (6 rounds, 16 tool calls) and a 90-second OpenAI request timeout
+bound the total time. When the tool budget is reached, the agent shall produce
+the itinerary from the data already gathered rather than fail.
+
+While a plan is generated or refined, the UI shall show rotating, lighthearted
+progress messages (20 variants) in a single status element that is relabeled in
+place, without flicker.
 
 ---
 
@@ -265,7 +300,7 @@ in browser session state, or resolved from Streamlit secrets.
 The application shall respect:
 
 - Nominatim rate limits
-- Overpass rate limits
+- Geoapify rate limits and daily free-tier quota
 - OpenAI API quotas
 
 ---
@@ -307,6 +342,7 @@ Recommended modules:
 - Pandas
 - Scikit-Learn
 - PyDeck
+- fpdf2 (PDF export)
 
 ---
 
@@ -319,12 +355,11 @@ Required:
 
 Required for production functionality:
 
-- Overpass
+- Geoapify Places (`GEOAPIFY_API_KEY`)
 
 Optional:
 
 - Wikivoyage
-- Geoapify Places (availability fallback only; Overpass remains primary)
 
 ---
 

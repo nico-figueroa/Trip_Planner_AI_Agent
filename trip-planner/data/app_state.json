@@ -1,1 +1,38 @@
-{}
+{
+  "destination": "Costa Rica",
+  "duration": 3,
+  "interests": "Food, visit family",
+  "location": {
+    "latitude": 10.2735633,
+    "longitude": -84.0739102,
+    "display_name": "Costa Rica"
+  },
+  "pois": [],
+  "travel_context": "Travel information available for Costa Rica.",
+  "itinerary": [
+    {
+      "day": 1,
+      "title": "Day 1",
+      "activities": [
+        "Explore Costa Rica",
+        "Focus on Food, visit family"
+      ]
+    },
+    {
+      "day": 2,
+      "title": "Day 2",
+      "activities": [
+        "Explore Costa Rica",
+        "Focus on Food, visit family"
+      ]
+    },
+    {
+      "day": 3,
+      "title": "Day 3",
+      "activities": [
+        "Explore Costa Rica",
+        "Focus on Food, visit family"
+      ]
+    }
+  ]
+}

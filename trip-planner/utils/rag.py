@@ -2,9 +2,11 @@ def get_destination_context(
     destination: str
 ):
     """
-    Future:
-        Wikivoyage retrieval
-        RAG grounding
+    Placeholder for future
+    Wikivoyage RAG integration.
     """
 
-    return ""
+    return (
+        f"Travel information available "
+        f"for {destination}."
+    )

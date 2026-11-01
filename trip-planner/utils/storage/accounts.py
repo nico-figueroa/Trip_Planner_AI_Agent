@@ -14,7 +14,7 @@ import requests
 import streamlit as st
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
 
-from utils.config import resolve_secret
+from utils.core.config import resolve_secret
 
 logger = logging.getLogger(__name__)
 
@@ -185,7 +185,7 @@ def get_store() -> CloudStore | None:
     """Disable cloud actions until both environment/.env settings are available."""
     dsn = resolve_secret("DATABASE_URL")[0]
     if dsn:
-        from utils.postgres_store import PostgresStore
+        from utils.storage.postgres_store import PostgresStore
 
         return PostgresStore(dsn)
     url = resolve_secret("SUPABASE_URL")[0]

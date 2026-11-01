@@ -1,8 +1,8 @@
 import pytest
 import requests
 
-from utils import accounts
-from utils.accounts import CloudStore, Identity, StorageError, identity_from_claims
+from utils.storage import accounts
+from utils.storage.accounts import CloudStore, Identity, StorageError, identity_from_claims
 
 
 def test_verified_identity_is_scoped_by_issuer_not_email(monkeypatch):
@@ -46,7 +46,7 @@ def test_postgres_is_preferred_when_database_url_is_configured(monkeypatch):
     monkeypatch.setattr(accounts, "resolve_secret", lambda name: (
         "postgresql://localhost/trip_planner" if name == "DATABASE_URL" else None, ".env",
     ))
-    from utils.postgres_store import PostgresStore
+    from utils.storage.postgres_store import PostgresStore
 
     assert isinstance(accounts.get_store(), PostgresStore)
 

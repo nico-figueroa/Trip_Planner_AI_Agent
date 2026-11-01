@@ -1,8 +1,8 @@
 import pytest
 import requests
 
-from utils import poi_search
-from utils.poi_search import find_nearby_pois
+from utils.providers import poi_search
+from utils.providers.poi_search import find_nearby_pois
 
 GEOAPIFY_RESPONSE = {
     "features": [
@@ -91,7 +91,7 @@ def test_missing_geoapify_key_is_reported(monkeypatch):
 
 
 def test_feedback_boosts_change_order_without_mutating_cached_retrieval(monkeypatch):
-    from utils.trip_features import poi_key
+    from utils.trips.trip_features import poi_key
 
     monkeypatch.setattr(poi_search, "_request_geoapify", lambda *args: GEOAPIFY_RESPONSE)
     raw = find_nearby_pois(47.6, -122.3)

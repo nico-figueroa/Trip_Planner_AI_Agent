@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from utils.geocoding import geocode_city
-from utils.poi_search import find_nearby_pois, search_pois
-from utils.rag import get_destination_context
+from utils.providers.geocoding import geocode_city
+from utils.providers.poi_search import find_nearby_pois, search_pois
+from utils.providers.rag import get_destination_context
 
 TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {

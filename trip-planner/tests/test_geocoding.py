@@ -1,7 +1,7 @@
 import pytest
 
-from utils import geocoding
-from utils.geocoding import DestinationNotFoundError, geocode_city
+from utils.providers import geocoding
+from utils.providers.geocoding import DestinationNotFoundError, geocode_city
 
 
 class MockResponse:

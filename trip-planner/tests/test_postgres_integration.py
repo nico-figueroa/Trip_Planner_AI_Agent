@@ -5,9 +5,9 @@ import uuid
 
 import pytest
 
-from utils.accounts import Identity
-from utils.config import resolve_secret
-from utils.postgres_store import PostgresStore
+from utils.storage.accounts import Identity
+from utils.core.config import resolve_secret
+from utils.storage.postgres_store import PostgresStore
 
 
 def test_local_postgres_private_storage_votes_and_admin_approval():

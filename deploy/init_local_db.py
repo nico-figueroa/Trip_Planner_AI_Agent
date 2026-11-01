@@ -11,7 +11,7 @@ from psycopg import sql
 from psycopg.conninfo import make_conninfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "trip-planner"))
-from utils.config import resolve_secret
+from utils.core.config import resolve_secret
 
 
 def initialize() -> None:

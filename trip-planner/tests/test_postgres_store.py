@@ -1,7 +1,7 @@
 from contextlib import contextmanager
 
-from utils.accounts import Identity
-from utils.postgres_store import PostgresStore
+from utils.storage.accounts import Identity
+from utils.storage.postgres_store import PostgresStore
 
 
 def test_local_postgres_owner_filter_is_parameterized(monkeypatch):

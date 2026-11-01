@@ -284,6 +284,15 @@ location link). Expenses are manually recorded by category/day in one trip
 currency, using exact decimal arithmetic. Show spent, remaining, and separately
 labeled model-estimated totals. Saved plans preserve expenses across refinement.
 
+The legacy plan importer and itinerary save/PDF/JSON export controls shall be
+available in the sidebar. When enabled, agent execution traces shall also render
+there. A "Start new trip" action shall be available above the request form and
+after itinerary output; either action clears the active session itinerary and
+trip-specific input/refinement fields while preserving account and interface
+preferences. After feedback review, users receive only a generic evaluation
+acknowledgement; review outcomes and rationale remain internal to application
+state, logs, and administrator review.
+
 ---
 
 # 4. Non-Functional Requirements

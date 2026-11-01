@@ -1,8 +1,8 @@
 import pytest
 
-from utils.agent import TripPlannerAgent
-from utils.openai_agent import PlanningError
-from utils.schemas import Itinerary
+from utils.planning.agent import TripPlannerAgent
+from utils.planning.openai_agent import PlanningError
+from utils.planning.schemas import Itinerary
 
 
 def valid_itinerary():

@@ -1,4 +1,4 @@
-"""Validated models for the planner's structured output."""
+"""Validated models for trip planning and structured itinerary output."""
 
 from pydantic import BaseModel, ConfigDict, Field # Pydantic classes for defining and validating data models
 

@@ -6,7 +6,7 @@ import json
 
 from pydantic import ValidationError # Exception raised for Pydantic model validation errors
 
-from utils.schemas import Itinerary
+from utils.planning.schemas import Itinerary
 
 # Public function to parse and validate the itinerary JSON returned by the AI planner
 def parse_itinerary(response_text: str) -> Itinerary:

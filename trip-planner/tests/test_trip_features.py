@@ -3,7 +3,7 @@ from decimal import Decimal
 
 import pytest
 
-from utils.trip_features import budget_totals, map_data, money, resolve_duration, safe_url
+from utils.trips.trip_features import budget_totals, map_data, money, resolve_duration, safe_url
 
 
 def test_inclusive_range_overrides_duration_across_year_boundary():
@@ -74,7 +74,7 @@ def test_unresolved_location_breaks_path_instead_of_fabricating_geometry():
 
 def test_plan_import_strips_account_metadata_and_validates_itinerary():
     import json
-    from utils.trip_features import import_plan_json
+    from utils.trips.trip_features import import_plan_json
 
     data = {
         "owner": "not-an-authentication-claim", "destination": "Seattle", "duration": 1,

@@ -7,13 +7,13 @@ from datetime import date # Standard Python date class
 from typing import Any # Standard Python typing module
 import requests
 
-from utils.openai_agent import OpenAITripAgent, PlanningError # Custom agent and planning error class
-from utils.openai_client import get_client # Function to get OpenAI client
-from utils.prompts import build_itinerary_prompt, commitment_is_scheduled, fixed_commitments # Prompt building and commitment handling functions
-from utils.schemas import Itinerary # Data schema for itinerary
-from utils.validation import validate_itinerary, validate_trip_request # Validation functions for trip request and itinerary
-from utils.geocoding import geocode_city
-from utils.trip_features import normalize, preserve_other_days
+from utils.planning.openai_agent import OpenAITripAgent, PlanningError # Custom agent and planning error class
+from utils.providers.openai_client import get_client # Function to get OpenAI client
+from utils.planning.prompts import build_itinerary_prompt, commitment_is_scheduled, fixed_commitments # Prompt building and commitment handling functions
+from utils.planning.schemas import Itinerary # Data schema for itinerary
+from utils.planning.validation import validate_itinerary, validate_trip_request # Validation functions for trip request and itinerary
+from utils.providers.geocoding import geocode_city
+from utils.trips.trip_features import normalize, preserve_other_days
 
 logger = logging.getLogger(__name__) # Logger for this module
 MAX_PLAN_POIS = 80 # Maximum number of points of interest allowed in the plan

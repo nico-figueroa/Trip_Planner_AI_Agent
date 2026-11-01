@@ -3,7 +3,7 @@ import logging
 
 import pytest
 
-from utils import logging_config, persistence
+from utils.storage import logging_config, persistence
 
 
 @pytest.fixture

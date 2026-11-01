@@ -1,7 +1,7 @@
 import json
 from datetime import date
 
-from utils.prompts import build_itinerary_prompt
+from utils.planning.prompts import build_itinerary_prompt
 
 
 def test_prompt_maps_start_date_to_each_trip_day():
@@ -100,7 +100,7 @@ def test_comma_separated_commitments_and_holidays_are_pinned():
 
 
 def test_commitment_scheduling_check_ignores_accents_and_dates():
-    from utils.prompts import commitment_is_scheduled
+    from utils.planning.prompts import commitment_is_scheduled
 
     assert commitment_is_scheduled(
         "December 24 San Jose christmas dinner", "Christmas Eve dinner in San José"

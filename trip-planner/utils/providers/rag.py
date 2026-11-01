@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-import threading
+import threading # Threading library for managing concurrent access to the model
 from functools import lru_cache # Caching decorator to store recent results in memory
 from typing import Any
 from pathlib import Path
@@ -14,7 +14,7 @@ import numpy as np
 import requests # HTTP requests library for making API calls
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
-from utils.config import USER_AGENT, WIKIVOYAGE_API_URL, resolve_secret
+from utils.core.config import USER_AGENT, WIKIVOYAGE_API_URL, resolve_secret
 
 logger = logging.getLogger(__name__)
 MAX_CONTEXT_CHARS = 3000 # Maximum number of characters to retrieve from Wikivoyage extract
@@ -27,7 +27,7 @@ def prepare_model() -> None:
     from sentence_transformers import SentenceTransformer
 
     model_path = resolve_secret("RAG_MODEL_PATH")[0] or str(
-        Path(__file__).resolve().parents[2] / "models" / "all-MiniLM-L6-v2"
+        Path(__file__).resolve().parents[3] / "models" / "all-MiniLM-L6-v2"
     )
     model = SentenceTransformer(
         "sentence-transformers/all-MiniLM-L6-v2", device="cpu",
@@ -89,13 +89,14 @@ def _cached_context(destination: str) -> tuple[bool, str]:
     extract = str(page.get("extract", "")).strip()[:MAX_ARTICLE_CHARS]
     return bool(extract), extract
 
+# Lock to ensure that the model is loaded only once across concurrent threads
 @lru_cache(maxsize=1)
 def _load_encoder() -> Any:
     """Load administrator-prepared weights locally, never remote Python code."""
     from sentence_transformers import SentenceTransformer
 
     model_path = resolve_secret("RAG_MODEL_PATH")[0] or str(
-        Path(__file__).resolve().parents[2] / "models" / "all-MiniLM-L6-v2"
+        Path(__file__).resolve().parents[3] / "models" / "all-MiniLM-L6-v2"
     )
     if not Path(model_path).is_dir():
         raise FileNotFoundError("Configure RAG_MODEL_PATH with a prepared semantic model directory.")
@@ -103,18 +104,18 @@ def _load_encoder() -> Any:
         model_path, device="cpu", local_files_only=True, trust_remote_code=False,
     )
 
-
+# Lock instance to prevent concurrent model loading
 def _encoder() -> Any:
     """Serialize first loading so concurrent sessions do not duplicate model memory."""
     with _model_lock:
         return _load_encoder()
 
-
+# Chunk an article into smaller passages for semantic indexing
 def chunk_article(text: str) -> list[str]:
     """Bound the index and overlap adjacent passages to preserve context."""
     return [text[start:start + 1200] for start in range(0, len(text), 1050)][:80]
 
-
+# Index a destination's text into semantic vectors for retrieval
 @lru_cache(maxsize=16)
 def _index(_destination: str, text: str) -> tuple[list[str], np.ndarray]:
     chunks = chunk_article(text)
@@ -123,7 +124,7 @@ def _index(_destination: str, text: str) -> tuple[list[str], np.ndarray]:
     )
     return chunks, vectors
 
-
+# Retrieve semantically relevant passages for a given query within a destination's context
 def semantic_passages(destination: str, text: str, query: str) -> list[dict[str, Any]]:
     """Search a destination-scoped semantic vector index by cosine similarity."""
     chunks, vectors = _index(destination, text)

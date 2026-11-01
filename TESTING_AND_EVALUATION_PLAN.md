@@ -32,7 +32,7 @@ Pop-Location
 | Trip features | Inclusive ranges, invalid ranges, decimal expenses, estimate/actual separation, safe URLs, ordered paths and unresolved geometry |
 | OpenAI configuration | .env search order and precedence, blank/missing values, environment fallback, no Streamlit secrets, safe HTTP 401/429/400 guidance, 90-second timeout |
 | Logging | Exact 200-event bound, corrupt-log recovery, path safety, redaction, write failures, idempotent handlers |
-| Streamlit UI | Root entry, anonymous session plans, configurable outputs, linked places table, PDF/JSON export, meter-based dots, date widget synchronization, day filters preserving full itinerary |
+| Streamlit UI | Root entry, anonymous session plans, configurable outputs, sidebar imports/save/exports/trace, top/bottom trip reset, generic feedback review message, linked places table, meter-based dots, date widget synchronization, day filters preserving itinerary |
 
 ## Integration and manual acceptance
 

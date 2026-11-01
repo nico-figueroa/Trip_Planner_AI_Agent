@@ -13,8 +13,8 @@ from typing import Any
 import requests # HTTP requests library for making API calls
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
-from utils.config import GEOAPIFY_URL, USER_AGENT, resolve_secret
-from utils.trip_features import poi_key, safe_url
+from utils.core.config import GEOAPIFY_URL, USER_AGENT, resolve_secret
+from utils.trips.trip_features import poi_key, safe_url
 
 logger = logging.getLogger(__name__)
 MAX_POIS = 20 # Maximum number of POIs to retrieve per request

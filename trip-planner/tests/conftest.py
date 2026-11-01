@@ -5,7 +5,7 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def isolated_runtime(monkeypatch, tmp_path):
-    from utils import accounts, persistence
+    from utils.storage import accounts, persistence
 
     monkeypatch.setattr(accounts, "resolve_secret", lambda name: (None, None))
     monkeypatch.setattr(persistence, "DATA_DIR", tmp_path)

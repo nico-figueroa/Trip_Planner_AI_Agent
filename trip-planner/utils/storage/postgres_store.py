@@ -6,7 +6,7 @@ import json
 import logging
 from typing import Any
 
-from utils.accounts import CloudStore, StorageError
+from utils.storage.accounts import CloudStore, StorageError
 
 logger = logging.getLogger(__name__)
 TABLES = {

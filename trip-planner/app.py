@@ -18,14 +18,14 @@ import pydeck as pdk
 from pydeck.types import String
 import streamlit as st
 
-from utils.accounts import StorageError, auth_configured, current_identity, get_store
-from utils.agent import TripPlannerAgent
-from utils.feedback import review_feedback
-from utils.logging_config import configure_logging
-from utils.openai_agent import PlanningError
-from utils.openai_client import MissingAPIKeyError, get_api_key
-from utils.pdf_report import build_itinerary_pdf, day_heading
-from utils.trip_features import (
+from utils.storage.accounts import StorageError, auth_configured, current_identity, get_store
+from utils.planning.agent import TripPlannerAgent
+from utils.planning.feedback import review_feedback
+from utils.storage.logging_config import configure_logging
+from utils.planning.openai_agent import PlanningError
+from utils.providers.openai_client import MissingAPIKeyError, get_api_key
+from utils.trips.pdf_report import build_itinerary_pdf, day_heading
+from utils.trips.trip_features import (
     budget_totals, import_plan_json, map_data, money, poi_key, resolve_duration, safe_url, selected_days,
 )
 
@@ -183,16 +183,6 @@ def _render_plan(
     if "Map" in outputs:
         # Comparison panes use distinct plan IDs; the main map keeps a stable key.
         _render_map({**plan, "id": prefix + str(plan.get("id", "session"))}, day, style)
-    if "Agent trace" in outputs:
-        with st.expander("Agent execution trace"):
-            for event in plan.get("trace", []):
-                st.markdown(f"**{event.get('tool', 'Agent step')}**")
-                if event.get("success"):
-                    st.json({"arguments": event.get("arguments", {}), "result": event.get("result")})
-                else:
-                    st.warning(event.get("error", "The tool could not be completed."))
-
-
 def _record_plan(plan: dict[str, Any]) -> None:
     plan["id"] = uuid.uuid4().hex
     plan["created_at"] = datetime.now(timezone.utc).isoformat()
@@ -241,6 +231,35 @@ def _sync_date_duration() -> None:
         if changed:
             st.session_state["date_adjustment"] = f"Duration automatically adjusted to {days} days to match the inclusive date range."
             st.session_state["duration"] = days
+
+
+def _start_new_trip() -> None:
+    """Clear trip-specific state and inputs while retaining account/UI preferences."""
+    st.session_state["planner_state"] = {}
+    st.session_state["current_plan"] = None
+    for key, value in {
+        "destination": "",
+        "duration": 3,
+        "start_date": None,
+        "end_date": None,
+        "interests": "",
+        "budget": "",
+        "budget_total": 0.0,
+        "currency": "USD",
+        "travel_style": "",
+        "additional_request": "",
+        "date_mode": "Number of days",
+    }.items():
+        st.session_state[key] = value
+    for key in list(st.session_state):
+        if key.startswith((
+            "day_filter_", "refinement_scope_", "refinement_instruction_",
+            "expense_category_", "expense_amount_", "expense_description_", "expense_day_",
+            "feedback_target_", "feedback_rating_", "feedback_comment_",
+        )):
+            st.session_state.pop(key, None)
+    for key in ("selected_plan", "before_refinement", "comparison_plans", "date_adjustment"):
+        st.session_state.pop(key, None)
 
 
 @st.cache_data(ttl=30)
@@ -317,21 +336,26 @@ with st.sidebar:
     if store is None:
         st.caption("Database storage and persistent feedback are not configured.")
 
+    with st.expander("Import an exported or legacy plan"):
+        upload = st.file_uploader("Plan JSON", type=["json"])
+        if st.button("Import into this session", disabled=upload is None):
+            try:
+                if upload is None:
+                    raise ValueError("Select a plan JSON file first.")
+                imported = import_plan_json(upload.getvalue())
+                _record_plan(imported)
+                st.session_state["selected_plan"] = imported["id"]
+                st.success("Plan imported into this session.")
+            except (ValueError, TypeError, KeyError) as error:
+                logger.warning("Plan import failed (%s).", type(error).__name__)
+                st.error("Invalid plan JSON: verify itinerary days, dates, coordinates, and expense data.")
+
+    save_actions = st.container()
+    trace_panel = st.container()
+
 st.title("AI Trip Planner")
 st.markdown("Create a grounded travel plan with live OpenStreetMap data and an AI planning agent.")
-with st.expander("Import an exported or legacy plan"):
-    upload = st.file_uploader("Plan JSON", type=["json"])
-    if st.button("Import into this session", disabled=upload is None):
-        try:
-            if upload is None:
-                raise ValueError("Select a plan JSON file first.")
-            imported = import_plan_json(upload.getvalue())
-            _record_plan(imported)
-            st.session_state["selected_plan"] = imported["id"]
-            st.success("Plan imported into this session. Use Save itinerary for your private account copy.")
-        except (ValueError, TypeError, KeyError) as error:
-            logger.warning("Plan import failed (%s).", type(error).__name__)
-            st.error("Invalid plan JSON: verify itinerary days, dates, coordinates, and expense data.")
+st.button("Start new trip", key="start_new_trip_top", on_click=_start_new_trip)
 date_mode = st.segmented_control(
     "Trip duration input", ["Number of days", "Date range", "Both"],
     default="Number of days", key="date_mode",
@@ -410,7 +434,8 @@ if displayed_plan:
         key=f"day_filter_{plan_id}",
     )
     _render_plan(displayed_plan, day, outputs, style)
-    with st.container(horizontal=True):
+    with save_actions:
+        st.subheader("Save and export")
         if st.button("Save itinerary", disabled=identity is None or store is None):
             try:
                 if identity is None or store is None:
@@ -434,6 +459,15 @@ if displayed_plan:
             file_name="trip-plan.json", mime="application/json", on_click="ignore",
             help="Keep this file private. Import it after sign-in to save an anonymous plan.",
         )
+    with trace_panel:
+        if "Agent trace" in outputs:
+            with st.expander("Agent execution trace"):
+                for event in displayed_plan.get("trace", []):
+                    st.markdown(f"**{event.get('tool', 'Agent step')}**")
+                    if event.get("success"):
+                        st.json({"arguments": event.get("arguments", {}), "result": event.get("result")})
+                    else:
+                        st.warning(event.get("error", "The tool could not be completed."))
     if not identity:
         st.caption("You can plan and download a PDF anonymously. Optional sign-in enables private cloud save/load.")
     if "Budget" in outputs:
@@ -453,10 +487,20 @@ if displayed_plan:
                 if has_budget and remaining < 0:
                     st.warning("Recorded expenses exceed the trip budget.")
                 with st.form(f"expense_{plan_id}"):
-                    category = st.selectbox("Expense category", ["Transport", "Lodging", "Food", "Activities", "Other"])
-                    amount = st.number_input(f"Amount ({currency_code})", min_value=0.0, value=0.0)
-                    description = st.text_input("Expense description", max_chars=200)
-                    expense_day = st.selectbox("Expense day", days_available)
+                    category = st.selectbox(
+                        "Expense category", ["Transport", "Lodging", "Food", "Activities", "Other"],
+                        key=f"expense_category_{plan_id}",
+                    )
+                    amount = st.number_input(
+                        f"Amount ({currency_code})", min_value=0.0, value=0.0,
+                        key=f"expense_amount_{plan_id}",
+                    )
+                    description = st.text_input(
+                        "Expense description", max_chars=200, key=f"expense_description_{plan_id}",
+                    )
+                    expense_day = st.selectbox(
+                        "Expense day", days_available, key=f"expense_day_{plan_id}",
+                    )
                     add_expense = st.form_submit_button("Add expense")
                 if add_expense:
                     if money(amount) <= 0:
@@ -476,8 +520,12 @@ if displayed_plan:
         target = st.selectbox(
             "Refinement scope", [None, *days_available],
             format_func=lambda value: "Whole trip" if value is None else f"Regenerate day {value} only",
+            key=f"refinement_scope_{plan_id}",
         )
-        instruction = st.text_area("What would you like to change?", max_chars=1000)
+        instruction = st.text_area(
+            "What would you like to change?", max_chars=1000,
+            key=f"refinement_instruction_{plan_id}",
+        )
         refine = st.form_submit_button("Refine itinerary")
     if refine:
         try:
@@ -544,9 +592,15 @@ if displayed_plan:
         feedback_target = st.selectbox(
             "Feedback target", ["", *poi_options],
             format_func=lambda value: "Entire itinerary" if not value else poi_options[value]["name"],
+            key=f"feedback_target_{plan_id}",
         )
-        rating = st.segmented_control("Was this helpful?", ["Positive", "Negative"], default="Positive")
-        comment = st.text_area("Comments (optional)", max_chars=2000)
+        rating = st.segmented_control(
+            "Was this helpful?", ["Positive", "Negative"], default="Positive",
+            key=f"feedback_rating_{plan_id}",
+        )
+        comment = st.text_area(
+            "Comments (optional)", max_chars=2000, key=f"feedback_comment_{plan_id}",
+        )
         submit_feedback = st.form_submit_button("Submit feedback", disabled=store is None)
     if submit_feedback:
         try:
@@ -561,7 +615,7 @@ if displayed_plan:
                 plan_id, rating.lower(), comment.strip(), feedback_target,
             )
             _feedback_stats.clear()
-            st.success("Feedback saved. Any proposed instruction changes require administrator approval.")
+            review_status = "not_requested"
             if comment.strip():
                 context = {
                     "destination": displayed_plan["destination"],
@@ -571,16 +625,25 @@ if displayed_plan:
                     ],
                     "constraints": displayed_plan.get("additional_request", ""),
                 }
-                review = _run_with_progress(partial(review_feedback, comment, context))
-                store.propose(feedback_id, review)
-                st.info(f"Review: {review['reason']} (status: {review['status']}).")
+                try:
+                    review = _run_with_progress(partial(review_feedback, comment, context))
+                    store.propose(feedback_id, review)
+                    review_status = review["status"]
+                except (*ERRORS, RuntimeError) as error:
+                    review_status = "failed"
+                    logger.warning("Feedback review failed (%s).", type(error).__name__)
+            st.session_state.setdefault("feedback_review_status", {})[feedback_id] = review_status
+            logger.info("Feedback review recorded (status=%s).", review_status)
+            st.success("Thank you. Your feedback will be evaluated to improve the application's performance.")
         except (*ERRORS, RuntimeError) as error:
             st.error(str(error))
+
+    st.button("Start new trip", key="start_new_trip_bottom", on_click=_start_new_trip)
 
 if identity and identity.admin:
     with st.expander("Administrator: local semantic model"):
         if st.button("Prepare local semantic model"):
-            from utils.rag import prepare_model
+            from utils.providers.rag import prepare_model
 
             try:
                 _run_with_progress(prepare_model)

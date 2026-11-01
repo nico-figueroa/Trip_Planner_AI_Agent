@@ -1,4 +1,4 @@
-from utils.pdf_report import build_itinerary_pdf
+from utils.trips.pdf_report import build_itinerary_pdf
 
 
 def test_pdf_report_renders_itinerary_with_unicode_text():
@@ -26,7 +26,7 @@ def test_pdf_report_tolerates_legacy_plan_shapes():
 
 
 def test_day_heading_includes_calendar_date_only_when_start_date_is_known():
-    from utils.pdf_report import day_heading
+    from utils.trips.pdf_report import day_heading
 
     day = {"day": 4, "title": "Christmas Eve dinner"}
 
@@ -40,7 +40,7 @@ def test_day_heading_includes_calendar_date_only_when_start_date_is_known():
 
 
 def test_unset_pdf_budget_does_not_report_negative_remaining(monkeypatch):
-    from utils import pdf_report
+    from utils.trips import pdf_report
 
     paragraphs = []
     original = pdf_report._ItineraryPDF.multi_cell

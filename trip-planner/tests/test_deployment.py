@@ -4,7 +4,7 @@ import runpy
 import psycopg
 from psycopg import sql
 
-from utils import config
+from utils.core import config
 
 
 def test_local_setup_creates_only_dedicated_databases_without_role_changes(monkeypatch):

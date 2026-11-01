@@ -5,8 +5,8 @@ import pytest
 import httpx
 from openai import AuthenticationError
 
-from utils import openai_agent
-from utils.openai_agent import OpenAITripAgent
+from utils.planning import openai_agent
+from utils.planning.openai_agent import OpenAITripAgent
 
 ITINERARY = {
     "destination": "Seattle",

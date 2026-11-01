@@ -2,7 +2,8 @@ import httpx
 import pytest
 from openai import AuthenticationError, BadRequestError, RateLimitError
 
-from utils import config, openai_client
+from utils.core import config
+from utils.providers import openai_client
 
 
 @pytest.fixture
@@ -103,4 +104,3 @@ def test_provider_errors_are_actionable_and_do_not_expose_bodies(
 
     assert expected in message
     assert "private key" not in message
-

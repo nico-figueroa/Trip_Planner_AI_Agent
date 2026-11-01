@@ -7,7 +7,7 @@ import re
 import sys
 from datetime import datetime, timezone
 
-from utils.persistence import append_log_event
+from utils.storage.persistence import append_log_event
 
 
 class SafeFormatter(logging.Formatter):

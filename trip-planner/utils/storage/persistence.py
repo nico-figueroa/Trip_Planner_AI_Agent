@@ -1,4 +1,4 @@
-"""Safe JSON persistence for active/saved itineraries and user feedback."""
+"""Safe JSON persistence for application state, plans, and event history."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
-DATA_DIR = Path(__file__).resolve().parents[1] / "data"
+DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 STATE_FILE = DATA_DIR / "app_state.json"
 FEEDBACK_FILE = DATA_DIR / "feedback.jsonl"
 LOG_FILE = DATA_DIR / "log.json"

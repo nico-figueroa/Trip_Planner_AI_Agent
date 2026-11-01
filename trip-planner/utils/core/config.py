@@ -5,7 +5,7 @@ from pathlib import Path
 
 from dotenv import dotenv_values
 
-DOTENV_FILE = Path(__file__).resolve().parents[1] / ".env"
+DOTENV_FILE = Path(__file__).resolve().parents[2] / ".env"
 
 USER_AGENT = "TripPlannerAI/1.0 (https://github.com/nico-figueroa/Trip_Planner_AI_Agent)"
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"

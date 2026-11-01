@@ -9,13 +9,13 @@ from typing import Any, Literal, cast
 import requests
 from openai import APIError
 
-from utils.config import OPENAI_MODEL
-from utils.geocoding import DestinationNotFoundError
-from utils.openai_client import describe_openai_error, get_client
-from utils.output_parser import parse_itinerary
-from utils.prompts import SYSTEM_PROMPT
-from utils.schemas import Itinerary
-from utils.tools import TOOL_DEFINITIONS, execute_tool
+from utils.core.config import OPENAI_MODEL
+from utils.providers.geocoding import DestinationNotFoundError
+from utils.providers.openai_client import describe_openai_error, get_client
+from utils.planning.output_parser import parse_itinerary
+from utils.planning.prompts import SYSTEM_PROMPT
+from utils.planning.schemas import Itinerary
+from utils.planning.tools import TOOL_DEFINITIONS, execute_tool
 
 logger = logging.getLogger(__name__)
 MAX_TOOL_ROUNDS = 6 # Maximum number of tool execution rounds allowed

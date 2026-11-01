@@ -20,6 +20,7 @@ Root app.py -> trip-planner/app.py
   |
   +-- Session plans, filters, date ranges, expenses, alternatives/comparisons
   +-- PyDeck meter dots + temporal schematic paths + light/dark maps
+  +-- Sidebar imports, save/download controls, and optional execution trace
   +-- PDF and private JSON exports/imports
   |
   +-- CloudStore / PostgresStore
@@ -75,6 +76,33 @@ The optional guide tool explicitly reports missing weights/provider failure.
 ADR-006 controls availability; ADR-007 defines semantic retrieval. There is no
 contradiction and no hosted vector database. Model and vector caches are
 process-local, not permanent user memory.
+
+## Code organization
+
+The `trip-planner/utils` package groups modules by responsibility:
+
+- `core`: shared service configuration.
+- `planning`: agent orchestration, Responses API function calling, prompts,
+  schemas, validation, and bounded feedback review.
+- `providers`: OpenAI, Nominatim, Geoapify, and Wikivoyage integrations.
+- `storage`: private account access, PostgreSQL and JSON persistence, and
+  credential-safe logging.
+- `trips`: deterministic date/budget/map features and PDF reporting.
+
+The root `trip-planner/app.py` remains the Streamlit entry point and composes
+these modules into the user experience.
+
+## Session controls
+
+The legacy plan importer and itinerary save/PDF/JSON export actions are in the
+sidebar. Agent execution details also render there only when enabled in visible
+outputs. “Start new trip” is available above the request form and after the
+current output; both controls clear trip-specific output and request/refinement
+inputs while retaining account and sidebar preferences.
+
+Feedback submissions show only a generic evaluation acknowledgement. Review
+status is retained in session tracking and server logs; review rationale and
+proposed guidance remain available only to configured administrators.
 
 ## Identity, persistence, and feedback
 

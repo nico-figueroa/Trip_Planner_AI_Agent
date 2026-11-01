@@ -7,7 +7,7 @@ from typing import Any
 
 from fpdf import FPDF
 
-from utils.trip_features import budget_totals, money, safe_url
+from utils.trips.trip_features import budget_totals, money, safe_url
 
 # fpdf2 core fonts only support Latin-1, so common typographic characters are mapped first.
 _TYPOGRAPHIC_REPLACEMENTS = str.maketrans(

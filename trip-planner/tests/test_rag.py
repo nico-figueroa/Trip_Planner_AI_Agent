@@ -1,7 +1,7 @@
 import numpy as np
 import requests
 
-from utils import rag
+from utils.providers import rag
 
 
 class Encoder:

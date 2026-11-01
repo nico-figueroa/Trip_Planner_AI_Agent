@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from utils import feedback
+from utils.planning import feedback
 
 
 def test_written_feedback_yields_pending_not_automatically_active_rule(monkeypatch):

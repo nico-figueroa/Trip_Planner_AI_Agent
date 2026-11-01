@@ -32,6 +32,8 @@ Community Cloud, Azure, Supabase migrations, and optional OIDC setup.
 - Optional OIDC accounts with private PostgreSQL/Supabase saved plans
 - Manual categorized expenses and separately labeled model cost estimates
 - Sidebar-configurable outputs, light/dark maps, and stable day filtering
+- Sidebar legacy-plan import, save/download actions, and optional agent trace
+- Start-new-trip controls at the top and end of trip output reset session inputs
 - Temporal schematic map paths and verified named beach locations
 - PDF/JSON export/import, explicit day-only refinement, and before/after views
 - Side-by-side trip comparison and explicitly enabled two-alternative generation
@@ -156,25 +158,11 @@ trip-planner/
   data/                        JSON/JSONL persistence
   tests/                       Offline unit tests
   utils/
-    accounts.py                Verified OIDC identity and Supabase persistence
-    agent.py                   Planner workflow and final validation
-    config.py                  Service endpoints and model configuration
-    geocoding.py               Nominatim client and cache
-    logging_config.py          Safe terminal and bounded JSON logging
-    openai_agent.py            Responses API tool loop and trace
-    openai_client.py           API key resolution and client setup
-    output_parser.py           Structured itinerary parsing
-    pdf_report.py              Itinerary PDF export (fpdf2)
-    postgres_store.py          Local PostgreSQL backend
-    feedback.py                Review into administrator-approved guidance
-    persistence.py             Safe JSON/JSONL storage
-    poi_search.py              Geoapify Places retrieval with addresses
-    prompts.py                 System instructions and request payload
-    rag.py                     Optional local semantic Wikivoyage vector search
-    schemas.py                 Pydantic itinerary schemas
-    tools.py                   Function registry and dispatch
-    validation.py              Request and itinerary validation
-    trip_features.py           Dates, budgets, safe imports/links and ordered map data
+    core/                      Shared service configuration
+    planning/                  Agent, prompts, tools, schemas, validation, feedback review
+    providers/                 OpenAI, Nominatim, Geoapify, Wikivoyage integrations
+    storage/                   OIDC account access, PostgreSQL, JSON persistence, logging
+    trips/                     Dates, budgets, maps, imports, and PDF reports
 deploy/                        Database schemas, model preparation and cloud startup
 IMPLEMENTATION.md              Administrator deployment and migration instructions
 ```

@@ -11,7 +11,7 @@ from typing import Any
 import requests
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
-from utils.config import NOMINATIM_URL, USER_AGENT
+from utils.core.config import NOMINATIM_URL, USER_AGENT
 
 logger = logging.getLogger(__name__)
 _request_lock = threading.Lock() # Lock to synchronize access to the last request timestamp

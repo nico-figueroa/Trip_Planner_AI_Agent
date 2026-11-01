@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from utils import persistence
+from utils.storage import persistence
 
 
 @pytest.fixture

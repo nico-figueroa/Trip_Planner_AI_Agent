@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 import unicodedata
 
-from utils.schemas import Itinerary
+from utils.planning.schemas import Itinerary
 
 
 def validate_trip_request(

@@ -163,8 +163,8 @@ def preserve_other_days(
 
 def import_plan_json(content: bytes) -> dict[str, Any]:
     """Import a single plan (or a legacy active plan), never shared account state."""
-    from utils.schemas import Itinerary
-    from utils.validation import validate_itinerary
+    from utils.planning.schemas import Itinerary
+    from utils.planning.validation import validate_itinerary
 
     if len(content) > 500000:
         raise ValueError("Plan JSON must be no larger than 500 KB.")

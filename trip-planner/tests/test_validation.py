@@ -2,9 +2,9 @@ import json
 
 import pytest
 
-from utils.output_parser import parse_itinerary
-from utils.schemas import Itinerary
-from utils.validation import validate_itinerary, validate_trip_request
+from utils.planning.output_parser import parse_itinerary
+from utils.planning.schemas import Itinerary
+from utils.planning.validation import validate_itinerary, validate_trip_request
 
 VALID_ITINERARY = {
     "destination": "Seattle",

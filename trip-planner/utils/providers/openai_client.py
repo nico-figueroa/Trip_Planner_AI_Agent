@@ -13,7 +13,7 @@ from openai import (
     RateLimitError,
 )
 
-from utils.config import resolve_secret
+from utils.core.config import resolve_secret
 
 logger = logging.getLogger(__name__)
 OPENAI_TIMEOUT_SECONDS = 90.0 # Timeout for OpenAI requests in seconds

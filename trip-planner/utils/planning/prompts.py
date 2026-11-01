@@ -1,4 +1,4 @@
-"""Concise, reusable instructions and request formatting for the planner."""
+"""Concise, reusable instructions and request formatting for trip planning."""
 
 from __future__ import annotations
 

@@ -158,19 +158,37 @@ def test_misplaced_fixed_commitment_triggers_one_model_repair():
     assert commitment_check(result)["repaired_by_model"] is True
 
 
-def test_ignored_fixed_commitment_is_inserted_on_its_day():
+def test_ignored_fixed_commitment_is_rejected_after_one_repair():
     from datetime import date
 
     agent = ScriptedAgent(valid_itinerary(), valid_itinerary())
 
-    result = TripPlannerAgent(agent=agent).generate_trip_plan(
-        "Seattle",
-        3,
-        additional_request="Dec 24 Escazu christmas dinner",
-        start_date=date(2026, 12, 23),
-    )
+    with pytest.raises(PlanningError, match="still violates"):
+        TripPlannerAgent(agent=agent).generate_trip_plan(
+            "Seattle", 3, additional_request="Dec 24 Escazu christmas dinner",
+            start_date=date(2026, 12, 23),
+        )
+    assert len(agent.requests) == 2
 
-    assert result["itinerary"]["daily_plan"][1]["activities"][0] == (
-        "Fixed commitment: Dec 24 Escazu christmas dinner"
+
+def test_single_day_regeneration_preserves_every_other_field():
+    import json
+
+    original = valid_itinerary().model_dump()
+    changed = valid_itinerary()
+    changed.daily_plan[0].activities = ["Unexpected change"]
+    changed.daily_plan[1].activities = ["New day two"]
+    changed.overview = "Unexpected overview"
+    scripted = ScriptedAgent(changed)
+    result = TripPlannerAgent(agent=scripted).generate_trip_plan(
+        "Seattle", 3, existing_itinerary=original, refinement="Change day two", target_day=2,
     )
-    assert commitment_check(result)["inserted_by_planner"] == [2]
+    payload = json.loads(scripted.requests[0])
+    assert payload["target_day"] == 2
+    assert "Copy every other day" in payload["instruction"]
+    actual = result["itinerary"]
+    assert actual["daily_plan"][0] == original["daily_plan"][0]
+    assert actual["daily_plan"][2] == original["daily_plan"][2]
+    assert actual["overview"] == original["overview"]
+    assert actual["travel_notes"] == original["travel_notes"]
+    assert actual["daily_plan"][1]["activities"] == ["New day two"]

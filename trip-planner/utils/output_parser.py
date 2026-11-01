@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import json
 
-from pydantic import ValidationError
+from pydantic import ValidationError # Exception raised for Pydantic model validation errors
 
 from utils.schemas import Itinerary
 
-
+# Public function to parse and validate the itinerary JSON returned by the AI planner
 def parse_itinerary(response_text: str) -> Itinerary:
     """Parse strict JSON, recovering a JSON object wrapped in surrounding text."""
     if not response_text or not response_text.strip():

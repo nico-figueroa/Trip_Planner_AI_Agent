@@ -113,6 +113,12 @@ The application shall optionally retrieve travel context from Wikivoyage.
 
 The retrieved content must be used as grounding context for itinerary generation.
 
+When enabled and configured, retrieval shall chunk destination articles, embed
+them with a local semantic model, search normalized vectors by cosine
+similarity, and return bounded relevant passages with Wikivoyage source URLs.
+No external vector database or OpenAI embedding calls are required. Missing
+weights or guide failures shall remain explicit, non-fatal outcomes.
+
 ---
 
 ## FR-007 Personalized Recommendations
@@ -136,8 +142,14 @@ the free days between commitments with a travel radius (short gaps stay within
 about 1.5 hours of the commitment towns; distant regions only in gaps of 3+
 days), and requires stated driving times for every travel leg. After
 generation, the planner verifies each commitment appears on its day; if not, it
-requests one model repair and, as a last resort, adds the commitment to that
-day itself. The UI and PDF show the date beside each day.
+requests one model repair and rejects the result if commitments still fail,
+preserving the previous plan. It shall not disguise contradictory travel by
+simply inserting a commitment into an invalid schedule.
+The UI and PDF show the date beside each day.
+
+Users can select number of days, an inclusive date range, or both. A valid date
+range takes precedence; the number of days is synchronized and the adjustment
+is displayed. Reject reversed, incomplete, or longer-than-30-day ranges.
 
 ---
 
@@ -149,6 +161,11 @@ The system shall generate:
 - Attraction recommendations
 - Dining recommendations
 - Activity recommendations
+
+Each day shall include ordered location names and nullable estimated daily
+costs in the trip currency. Estimates must be distinguished from actual prices.
+Users may explicitly generate two alternatives only when enabled in sidebar
+configuration; this action makes additional model calls.
 
 ---
 
@@ -176,6 +193,12 @@ The map shall:
 - Show itinerary locations and regional bases
 - Fit the initial zoom so every plotted location is visible
 - Support zoom and pan
+- Use meter-based dots with pixel visibility limits and smooth scroll zoom
+- Show a schematic PathLayer in temporal visit order, not a road route
+- Resolve named beach destinations to verified coordinates; report unresolved locations
+- Offer light/dark styles and entire-trip/single-day filtering
+
+Filters shall not clear or regenerate the underlying itinerary.
 
 ---
 
@@ -195,15 +218,18 @@ Stored information:
 
 ## FR-012 Persistence
 
-The application shall persist:
+With optional sign-in, the application shall privately save/load:
 
 - Generated itineraries
 - User feedback
 
-Files:
+Use local PostgreSQL for development/testing and Supabase PostgreSQL for
+deployment. Identity comes from a trusted OIDC provider; private records are
+scoped to verified issuer/subject identities. Anonymous plans remain in the
+browser session and are downloadable without sign-in.
 
-- app_state.json
-- feedback.jsonl
+Legacy app_state.json/feedback.jsonl remain intact but are not shared across
+public user sessions. Users may privately export/import individual JSON plans.
 
 Users shall also be able to download the displayed itinerary as a PDF report
 (overview, daily plan, travel notes, and nearby places with addresses).
@@ -217,6 +243,18 @@ Users shall be able to provide:
 - Positive feedback
 - Negative feedback
 - Free-text comments
+
+POI votes require sign-in and affect candidate ranking by +0.25 per upvote
+and -0.35 per downvote. Count only the latest vote per actor/POI across plans,
+not repeated submissions. Show permanent feedback statistics at the bottom
+of the interface.
+
+Written feedback receives model review for actionable, supported improvements.
+Reject manipulation and non-actionable complaints, not legitimate negative
+feedback based on tone. The model cannot prove arbitrary factual complaints
+false. All learned instructions require administrator approval; only bounded
+approved advisory rules may influence future requests, never core safety or
+current-user constraints.
 
 ---
 
@@ -232,6 +270,19 @@ Examples:
 
 Refinement keeps the original additional request and start date, so fixed
 commitments still apply after a change.
+
+For explicit single-day regeneration, instruct the model to copy all other
+days unchanged and enforce this in code. Show before/after comparisons when
+enabled. Allow side-by-side comparison of existing/saved/session trip options.
+
+## FR-015 Interface Configuration and Budget Tracking
+
+Sidebar controls enable/hide nearby places, maps, notes, traces, and budget
+reporting; enable comparison and optional alternative generation. POI tables
+include safe information links (official site when available, otherwise an OSM
+location link). Expenses are manually recorded by category/day in one trip
+currency, using exact decimal arithmetic. Show spent, remaining, and separately
+labeled model-estimated totals. Saved plans preserve expenses across refinement.
 
 ---
 
@@ -290,8 +341,12 @@ Supported mechanisms:
 - `.env` files (first `trip-planner/.env`, then launch directory and parents;
   process environment is the fallback)
 
-API credentials shall not be entered or validated through a sidebar, stored
-in browser session state, or resolved from Streamlit secrets.
+API credentials shall not be entered or validated through a sidebar or stored
+in browser session state. Cloud administrators may convey top-level settings
+through gitignored secrets.toml/Cloud Secrets, which Streamlit exports to the
+environment; application key lookup still uses .env/environment precedence.
+Native OIDC settings are read through Streamlit secrets. Never commit the real
+TOML file, Supabase service-role keys, database URIs, or user exports.
 
 ---
 
@@ -343,6 +398,9 @@ Recommended modules:
 - Scikit-Learn
 - PyDeck
 - fpdf2 (PDF export)
+- Sentence Transformers (local semantic embeddings)
+- psycopg (local PostgreSQL)
+- Streamlit OIDC authentication extra
 
 ---
 
@@ -365,12 +423,9 @@ Optional:
 
 ## Storage
 
-Supported formats:
-
-- JSON
-- JSONL
-
-No external database required.
+PostgreSQL JSONB for private plans and SQL feedback/guidance tables.
+Local PostgreSQL is used for development/testing; Supabase for cloud hosting.
+JSON exports and bounded local JSON logs remain supported.
 
 ---
 
@@ -414,9 +469,8 @@ streamlit run app.py
 - Weather integration
 - Hotel recommendation engine
 - Flight recommendation engine
-- Cost estimation engine
-- User accounts
-- Vector database memory
+- Verified supplier pricing beyond the current model estimates
+- Hosted vector database memory beyond the current local semantic index
 - LangGraph workflow support
 - OpenTelemetry tracing
 - Deployment to Streamlit Cloud

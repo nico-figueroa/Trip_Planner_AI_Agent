@@ -56,6 +56,8 @@ def test_find_nearby_pois_maps_geoapify_places_with_addresses(monkeypatch):
             "address": "100 Main Street, Seattle, WA 98101",
             "latitude": 47.6,
             "longitude": -122.3,
+            "id": "",
+            "url": "https://www.openstreetmap.org/?mlat=47.6&mlon=-122.3#map=16/47.6/-122.3",
         },
         {
             "name": "Central Park",
@@ -63,6 +65,8 @@ def test_find_nearby_pois_maps_geoapify_places_with_addresses(monkeypatch):
             "address": "200 Park Avenue, Seattle, WA 98101",
             "latitude": 47.61,
             "longitude": -122.31,
+            "id": "",
+            "url": "https://www.openstreetmap.org/?mlat=47.61&mlon=-122.31#map=16/47.61/-122.31",
         },
     ]
     result[0]["name"] = "Changed by caller"
@@ -84,6 +88,18 @@ def test_missing_geoapify_key_is_reported(monkeypatch):
 
     with pytest.raises(ValueError, match="GEOAPIFY_API_KEY"):
         find_nearby_pois(47.6, -122.3)
+
+
+def test_feedback_boosts_change_order_without_mutating_cached_retrieval(monkeypatch):
+    from utils.trip_features import poi_key
+
+    monkeypatch.setattr(poi_search, "_request_geoapify", lambda *args: GEOAPIFY_RESPONSE)
+    raw = find_nearby_pois(47.6, -122.3)
+    park_id = poi_key(raw[1])
+    boosted = poi_search.search_pois(47.6, -122.3, boosts={park_id: 2 * 0.25 + 0.25})
+    assert boosted[0]["name"] == "Central Park"
+    assert boosted[0]["boost"] == pytest.approx(0.75)
+    assert poi_search.search_pois(47.6, -122.3)[0]["name"] == "City Museum"
 
 
 def test_geoapify_key_is_sent_in_header_not_url(monkeypatch):

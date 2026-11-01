@@ -5,9 +5,9 @@ from __future__ import annotations
 import json
 import logging
 import os
-import sys
-import tempfile
-import threading
+import sys # System-specific parameters and functions, used for error output
+import tempfile # Temporary file creation for atomic writes
+import threading # Thread-safe lock for atomic file writes
 from pathlib import Path
 from typing import Any
 
@@ -16,9 +16,9 @@ DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 STATE_FILE = DATA_DIR / "app_state.json"
 FEEDBACK_FILE = DATA_DIR / "feedback.jsonl"
 LOG_FILE = DATA_DIR / "log.json"
-_write_lock = threading.RLock()
+_write_lock = threading.RLock() # Reentrant lock to ensure thread-safe writes to JSON files
 
-
+# Internal helper to ensure persistence paths remain within the data directory
 def _safe_data_path(path: Path) -> Path:
     data_directory = DATA_DIR.resolve()
     resolved_path = path.resolve()
@@ -26,7 +26,7 @@ def _safe_data_path(path: Path) -> Path:
         raise ValueError("Persistence paths must remain inside the application data directory.")
     return resolved_path
 
-
+# Internal helper to atomically write JSON data to a file
 def _write_json(path: Path, data: Any) -> None:
     path = _safe_data_path(path)
     path.parent.mkdir(parents=True, exist_ok=True)

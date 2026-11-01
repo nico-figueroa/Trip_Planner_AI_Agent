@@ -14,8 +14,8 @@ from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponen
 from utils.config import NOMINATIM_URL, USER_AGENT
 
 logger = logging.getLogger(__name__)
-_request_lock = threading.Lock()
-_last_request_at = 0.0
+_request_lock = threading.Lock() # Lock to synchronize access to the last request timestamp
+_last_request_at = 0.0 # Timestamp of the last Nominatim request to enforce rate limiting
 
 
 class DestinationNotFoundError(ValueError):
@@ -44,6 +44,8 @@ def _respect_rate_limit() -> None:
     stop=stop_after_attempt(3),
     reraise=True,
 )
+
+# Internal function to perform a Nominatim request with retry and rate limiting
 def _request_nominatim(city: str) -> list[dict[str, Any]]:
     _respect_rate_limit()
     response = requests.get(
@@ -55,8 +57,8 @@ def _request_nominatim(city: str) -> list[dict[str, Any]]:
     response.raise_for_status()
     return response.json()
 
-
-@lru_cache(maxsize=256)
+# Internal function to perform a cached geocode lookup using Nominatim
+@lru_cache(maxsize=256) # Cache up to 256 geocoding results to reduce repeated Nominatim requests
 def _cached_geocode(city: str) -> tuple[float, float, str, str, str] | None:
     results = _request_nominatim(city)
     if not results:
@@ -92,7 +94,7 @@ def _cached_geocode(city: str) -> tuple[float, float, str, str, str] | None:
         str(result.get("display_name", resolved_city)),
     )
 
-
+# Public function to geocode a city using the cached Nominatim lookup
 def geocode_city(city: str) -> dict[str, float | str]:
     """Resolve a city or destination to coordinates and address details."""
     if not isinstance(city, str):

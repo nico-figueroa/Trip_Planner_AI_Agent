@@ -1,0 +1,15 @@
+.git
+.venv
+.agents
+.claude
+.pytest_cache
+**/__pycache__
+**/.env
+**/.env.*
+**/secrets.toml
+**/data
+**/log.json
+models
+.cache
+exports
+downloads

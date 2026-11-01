@@ -245,6 +245,10 @@ Travel context improves itinerary quality but must not become a single point of 
 
 Use Wikivoyage as an optional enhancement.
 
+This controls availability, not the retrieval method. ADR-007's semantic
+vector search is optional too: missing weights or guide/network failures must
+not block planning. The ADRs do not contradict each other.
+
 ### Rationale
 
 Benefits:
@@ -282,7 +286,16 @@ Travel recommendations should be grounded in real source material whenever possi
 
 ### Decision
 
-Implement a lightweight RAG pipeline.
+Implement semantic RAG: retrieve a destination article, chunk up to 80,000
+characters into overlapping passages, embed locally with all-MiniLM-L6-v2,
+and search normalized vectors by cosine similarity. Return up to three bounded
+passages with source URLs.
+
+The previous implementation fetched a short extract without vector search.
+This decision now explicitly requires semantic retrieval when configured,
+while ADR-006 preserves optional availability. Model/index caches are bounded
+per process; no hosted vector database or paid embedding API is used.
+Administrator preparation and additional CPU/RAM/dependencies are tradeoffs.
 
 ### Rationale
 
@@ -300,7 +313,7 @@ Improved recommendation quality.
 
 # ADR-008
 
-## Use Local JSON Storage Instead of a Database
+## Use Local PostgreSQL and Supabase for Private Accounts
 
 ### Status
 
@@ -308,34 +321,40 @@ Accepted
 
 ### Context
 
-The project requires persistence but is intended as a portfolio-scale application.
+Optional private accounts and durable feedback require shared persistence across
+application sessions, while retaining a small, single-application architecture.
 
 ### Decision
 
-Store application state locally.
+Use local PostgreSQL for development/testing and Supabase PostgreSQL for cloud
+deployments, sharing the initial schema. Plans remain JSON-shaped in JSONB;
+feedback and administrator-approved guidance use SQL tables. Optional native
+OIDC sign-in identifies accounts by verified issuer and subject.
 
-Files:
-
-- app_state.json
-- feedback.jsonl
+This supersedes the earlier local-JSON-only/no-database decision by explicit
+user request. Only the trusted backend holds database credentials/service-role
+keys. Supabase browser roles are denied direct table/RPC access. Private queries
+always include the verified owner. Local development may use administrator
+credentials as explicitly selected; no roles are automatically created.
+Legacy JSON files are preserved but not loaded into public sessions.
 
 ### Rationale
 
 Benefits:
 
-- Simplicity
-- Minimal infrastructure
-- Easier development
+- One shared schema for local PostgreSQL and hosted Supabase
+- JSON-shaped account snapshots without a separate plan-object ORM
+- Server-only account authorization and durable feedback
 
 ### Alternatives Considered
 
-- PostgreSQL
-- Supabase
+- Shared local JSON (not suitable for private multi-user cloud storage)
 - MongoDB
 
 ### Outcome
 
-Lower complexity while meeting requirements.
+Durable private accounts across hosting targets, at the cost of database
+configuration and administration.
 
 ---
 
@@ -396,6 +415,11 @@ Feedback Types:
 - Positive feedback
 - Negative feedback
 - Free text comments
+
+Feedback now persists in PostgreSQL. POI boosts are +0.25/-0.35 per latest
+signed-in actor/POI vote. Written comments produce bounded proposed advisory
+rules, activated only after administrator approval. Negative tone alone is not
+evidence of falsehood; unsupported claims should prompt verification.
 
 ### Outcome
 
@@ -508,8 +532,13 @@ Accepted
 Resolve API keys from the implementation's local `.env` first, then `.env` in
 the launch directory and its parents (nearest first), then the process
 environment. Use the first non-empty value. Remove sidebar key input,
-session overrides, Streamlit-secrets support, and standalone connection tests.
+session overrides and standalone connection tests.
 Do not mutate the process environment while reading `.env`.
+
+Cloud administrators may convey top-level settings through gitignored
+secrets.toml/Community Cloud Secrets. Streamlit exports root values as
+environment variables; API key lookup remains .env/environment.
+Native OIDC configuration uses Streamlit secrets.
 
 Log application events to the terminal and an atomically written JSON history
 of the latest 200 events. Log only safe operation/error metadata; omit provider
@@ -533,4 +562,4 @@ The following decisions may change in future releases:
 
 | Current | Future Candidate |
 |----------|------------------|
-| JSON Storage | PostgreSQL
+| In-process semantic vectors | Hosted vector service if corpus/traffic warrants |

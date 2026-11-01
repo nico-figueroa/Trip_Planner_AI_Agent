@@ -67,7 +67,7 @@ def test_agent_executes_tool_calls_and_returns_structured_itinerary(monkeypatch)
             "country": "United States",
             "display_name": "Seattle",
         },
-        "find_nearby_pois": [{"name": "Seattle Art Museum"}],
+        "search_pois": [{"name": "Seattle Art Museum"}],
     }
     monkeypatch.setattr(
         openai_agent,

@@ -37,3 +37,24 @@ def test_day_heading_includes_calendar_date_only_when_start_date_is_known():
     assert build_itinerary_pdf(
         {"start_date": "2026-12-21", "itinerary": {"daily_plan": [day]}}
     ).startswith(b"%PDF")
+
+
+def test_unset_pdf_budget_does_not_report_negative_remaining(monkeypatch):
+    from utils import pdf_report
+
+    paragraphs = []
+    original = pdf_report._ItineraryPDF.multi_cell
+
+    def capture(self, width, height, text, *args, **kwargs):
+        paragraphs.append(text)
+        return original(self, width, height, text, *args, **kwargs)
+
+    monkeypatch.setattr(pdf_report._ItineraryPDF, "multi_cell", capture)
+    pdf = build_itinerary_pdf({
+        "budget_total": "0", "currency": "USD",
+        "expenses": [{"day": 1, "category": "Food", "amount": "10", "description": "Lunch"}],
+        "itinerary": {"daily_plan": [{"day": 1, "estimated_cost": 20.0}]},
+    })
+    assert pdf.startswith(b"%PDF")
+    assert any("total budget not set" in text for text in paragraphs)
+    assert not any("Remaining budget:" in text for text in paragraphs)

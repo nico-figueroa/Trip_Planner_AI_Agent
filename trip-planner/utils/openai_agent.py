@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import Any, Literal, cast
 
 import requests
 from openai import APIError
@@ -18,19 +18,39 @@ from utils.schemas import Itinerary
 from utils.tools import TOOL_DEFINITIONS, execute_tool
 
 logger = logging.getLogger(__name__)
-MAX_TOOL_ROUNDS = 6
-MAX_TOOL_CALLS = 16
-SKIPPED_TOOL_MESSAGE = (
+MAX_TOOL_ROUNDS = 6 # Maximum number of tool execution rounds allowed
+MAX_TOOL_CALLS = 16 # Maximum number of individual tool calls allowed
+SKIPPED_TOOL_MESSAGE = ( 
     "Tool budget reached. Build the final itinerary from the data already gathered."
-)
+) # Message displayed when the tool execution budget is exhausted
+def _strict_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    """OpenAI strict mode requires every object property, including nullable ones."""
+    result = json.loads(json.dumps(schema))
+
+    def visit(node: Any) -> None:
+        if isinstance(node, dict):
+            node.pop("default", None)
+            if node.get("type") == "object":
+                node["required"] = list(node.get("properties", {}))
+                node["additionalProperties"] = False
+            for value in node.values():
+                visit(value)
+        elif isinstance(node, list):
+            for value in node:
+                visit(value)
+
+    visit(result)
+    return result
+
+
 RESPONSE_FORMAT = {
     "format": {
         "type": "json_schema",
         "name": "trip_itinerary",
-        "schema": Itinerary.model_json_schema(),
+        "schema": _strict_schema(Itinerary.model_json_schema()),
         "strict": True,
     }
-}
+} # Response format for the model
 
 
 class PlanningError(RuntimeError):
@@ -42,7 +62,7 @@ def _tool_error_message(tool_name: str, error: Exception) -> str:
         return "No matching destination was found."
     if tool_name == "geocode_city":
         return "Destination lookup is temporarily unavailable."
-    if tool_name == "find_nearby_pois":
+    if tool_name in ("find_nearby_pois", "search_pois"):
         return "Nearby place search is temporarily unavailable."
     if tool_name == "get_destination_context":
         return "Optional travel guide context is unavailable."
@@ -51,9 +71,9 @@ def _tool_error_message(tool_name: str, error: Exception) -> str:
 
 def _model_payload(tool_name: str, result: Any) -> Any:
     """Drop display-only fields so tool outputs stay small in the model context."""
-    if tool_name == "find_nearby_pois" and isinstance(result, list):
+    if tool_name in ("find_nearby_pois", "search_pois") and isinstance(result, list):
         return [
-            {key: value for key, value in item.items() if key != "address"}
+            {key: value for key, value in item.items() if key not in ("address", "url", "id")}
             if isinstance(item, dict)
             else item
             for item in result
@@ -64,16 +84,22 @@ def _model_payload(tool_name: str, result: Any) -> Any:
 class OpenAITripAgent:
     """Run a bounded Responses API tool loop and validate the final itinerary."""
 
-    def __init__(self, client: Any | None = None, model: str = OPENAI_MODEL):
+    def __init__(
+        self, client: Any | None = None, model: str = OPENAI_MODEL,
+        boosts: dict[str, float] | None = None,
+    ):
         self.client = client if client is not None else get_client()
         self.model = model
+        self.boosts = boosts or {}
 
-    def _create_response(self, tool_choice: str, **request: Any) -> Any:
+    def _create_response(
+        self, tool_choice: Literal["auto", "none"], **request: Any
+    ) -> Any:
         return self.client.responses.create(
             model=self.model,
-            tools=TOOL_DEFINITIONS,
+            tools=cast(Any, TOOL_DEFINITIONS),
             tool_choice=tool_choice,
-            text=RESPONSE_FORMAT,
+            text=cast(Any, RESPONSE_FORMAT),
             **request,
         )
 
@@ -81,7 +107,10 @@ class OpenAITripAgent:
         arguments: dict[str, Any] = {}
         try:
             arguments = json.loads(call.arguments)
-            result = execute_tool(call.name, arguments)
+            if call.name in ("search_pois", "find_nearby_pois"):
+                result = execute_tool("search_pois", {**arguments, "boosts": self.boosts})
+            else:
+                result = execute_tool(call.name, arguments)
         except (
             DestinationNotFoundError,
             requests.RequestException,
@@ -118,7 +147,7 @@ class OpenAITripAgent:
         """
         trace: list[dict[str, Any]] = []
         executed_calls = 0
-        tool_choice = "auto"
+        tool_choice: Literal["auto", "none"] = "auto"
         try:
             response = self._create_response(
                 tool_choice,

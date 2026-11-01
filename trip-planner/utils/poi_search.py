@@ -10,14 +10,15 @@ import time
 from functools import lru_cache
 from typing import Any
 
-import requests
+import requests # HTTP requests library for making API calls
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 from utils.config import GEOAPIFY_URL, USER_AGENT, resolve_secret
+from utils.trip_features import poi_key, safe_url
 
 logger = logging.getLogger(__name__)
-MAX_POIS = 20
-GEOAPIFY_CATEGORIES = {
+MAX_POIS = 20 # Maximum number of POIs to retrieve per request
+GEOAPIFY_CATEGORIES = { # Mapping of Geoapify category keys to human-readable labels
     "entertainment.museum": "Museum",
     "national_park": "National park",
     "leisure.park": "Park",
@@ -25,18 +26,21 @@ GEOAPIFY_CATEGORIES = {
     "tourism.attraction": "Attraction",
     "catering.restaurant": "Restaurant",
     "catering.cafe": "Cafe",
+    "beach": "Beach",
 }
-_request_lock = threading.Lock()
-_last_request_at = 0.0
+_request_lock = threading.Lock() # Lock to synchronize access to the last request timestamp
+_last_request_at = 0.0 # Timestamp of the last Geoapify request to enforce rate limiting
 
+# Helper functions for Geoapify POI search
 
+# Determine if an error is retryable for Geoapify requests
 def _is_retryable(error: BaseException) -> bool:
     if not isinstance(error, requests.RequestException):
         return False
     response = getattr(error, "response", None)
     return response is None or response.status_code == 429 or response.status_code >= 500
 
-
+# Respect the rate limit for Geoapify requests
 def _respect_rate_limit() -> None:
     global _last_request_at
     with _request_lock:
@@ -46,6 +50,8 @@ def _respect_rate_limit() -> None:
         _last_request_at = time.monotonic()
 
 
+# Validate the search parameters for Geoapify POI search
+# Ensures latitude, longitude, and radius are within acceptable ranges
 def _validate_search(latitude: float, longitude: float, radius: int) -> tuple[float, float]:
     try:
         latitude = float(latitude)
@@ -60,7 +66,7 @@ def _validate_search(latitude: float, longitude: float, radius: int) -> tuple[fl
         raise ValueError("Search radius must be between 100 and 10000 meters.")
     return latitude, longitude
 
-
+# Determine the primary category label for a Geoapify POI based on its categories
 def _category(categories: Any) -> str:
     if not isinstance(categories, list):
         return "Attraction"
@@ -76,7 +82,7 @@ def _category(categories: Any) -> str:
         "Attraction",
     )
 
-
+# Extract the address for a Geoapify POI, excluding the place name
 def _address(properties: dict[str, Any], name: str) -> str:
     """Return the street/locality part of a Geoapify address without the place name."""
     line1 = str(properties.get("address_line1") or "").strip()
@@ -85,13 +91,15 @@ def _address(properties: dict[str, Any], name: str) -> str:
         return ", ".join(part for part in (line1, line2) if part)
     return line2 or str(properties.get("formatted") or "").strip()
 
-
+# Retry decorator for Geoapify requests
 @retry(
     retry=retry_if_exception(_is_retryable),
     wait=wait_exponential(multiplier=1, min=1, max=2),
     stop=stop_after_attempt(2),
     reraise=True,
 )
+
+# Make a request to the Geoapify POI search API with retry logic
 def _request_geoapify(
     latitude: float,
     longitude: float,
@@ -118,8 +126,8 @@ def _request_geoapify(
     response.raise_for_status()
     return response.json()
 
-
-@lru_cache(maxsize=64)
+# Cached wrapper around Geoapify POI search to reduce API calls
+@lru_cache(maxsize=64) # max 64 cached results because of memory constraints
 def _cached_pois(
     latitude: float,
     longitude: float,
@@ -155,13 +163,15 @@ def _cached_pois(
                 "address": _address(properties, point[0]),
                 "latitude": point[1],
                 "longitude": point[2],
+                "id": str(properties.get("place_id") or ""),
+                "url": safe_url(properties.get("website"), point[1], point[2]),
             }
         )
         if len(pois) == MAX_POIS:
             break
     return tuple(pois)
 
-
+# Public function to find nearby POIs using the cached Geoapify search
 def find_nearby_pois(
     latitude: float,
     longitude: float,
@@ -179,3 +189,16 @@ def find_nearby_pois(
         logger.warning("Geoapify request failed (%s).", type(error).__name__)
         raise ValueError("Nearby place search is temporarily unavailable.") from error
     return copy.deepcopy(list(pois))
+
+
+def search_pois(
+    latitude: float, longitude: float, radius: int = 3000,
+    boosts: dict[str, float] | None = None,
+) -> list[dict[str, Any]]:
+    """Apply current feedback outside the raw retrieval cache, preserving stable ties."""
+    pois = find_nearby_pois(latitude, longitude, radius)
+    for rank, poi in enumerate(pois):
+        poi["id"] = poi_key(poi)
+        poi["boost"] = float((boosts or {}).get(poi["id"], 0))
+        poi["score"] = 1 - rank / max(len(pois), 1) + poi["boost"]
+    return sorted(pois, key=lambda poi: -poi["score"])

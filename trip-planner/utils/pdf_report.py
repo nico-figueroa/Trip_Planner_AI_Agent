@@ -7,6 +7,8 @@ from typing import Any
 
 from fpdf import FPDF
 
+from utils.trip_features import budget_totals, money, safe_url
+
 # fpdf2 core fonts only support Latin-1, so common typographic characters are mapped first.
 _TYPOGRAPHIC_REPLACEMENTS = str.maketrans(
     {
@@ -95,7 +97,24 @@ def build_itinerary_pdf(plan: dict[str, Any]) -> bytes:
             for activity in activities if isinstance(activities, list) else []:
                 if isinstance(activity, str):
                     paragraph(f"  - {activity}")
+            if day.get("estimated_cost") is not None:
+                paragraph(
+                    f"Estimated cost: {day['estimated_cost']:.2f} {plan.get('currency', 'USD')} (not a quote)",
+                    "I",
+                )
             pdf.ln(2)
+
+    if plan.get("budget_total") or plan.get("expenses"):
+        spent, remaining, estimated = budget_totals(plan)
+        heading("Budget tracking")
+        paragraph(
+            f"Recorded spending: {spent} | Remaining budget: {remaining} {plan.get('currency', 'USD')}"
+            if money(plan.get("budget_total", 0)) > 0 else f"Recorded spending: {spent}; total budget not set."
+        )
+        if estimated is not None:
+            paragraph(f"Model-estimated total: {estimated} (not actual prices)")
+        for expense in plan.get("expenses", []):
+            paragraph(f"Day {expense['day']}: {expense['category']} - {expense['amount']} - {expense['description']}")
 
     if itinerary.get("travel_notes"):
         heading("Travel notes")
@@ -109,6 +128,10 @@ def build_itinerary_pdf(plan: dict[str, Any]) -> bytes:
             if poi.get("address"):
                 line += f" - {poi['address']}"
             paragraph(f"  - {line}", size=9)
+            if poi.get("url"):
+                url = safe_url(poi["url"])
+                if url:
+                    paragraph(url, size=8)
         pdf.ln(2)
         paragraph(
             "Places powered by Geoapify using OpenStreetMap data "

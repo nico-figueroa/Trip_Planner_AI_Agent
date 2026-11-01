@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from utils.geocoding import geocode_city
-from utils.poi_search import find_nearby_pois
+from utils.poi_search import find_nearby_pois, search_pois
 from utils.rag import get_destination_context
 
 TOOL_DEFINITIONS: list[dict[str, Any]] = [
@@ -23,10 +23,11 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     },
     {
         "type": "function",
-        "name": "find_nearby_pois",
+        "name": "search_pois",
         "description": (
             "Retrieve up to 20 named museums, parks, attractions, restaurants, cafes, "
-            "and landmarks within 3 km of a coordinate returned by geocode_city."
+            "beaches, and landmarks within 3 km of a coordinate returned by geocode_city. "
+            "Places are ranked with accumulated explicit feedback boosts."
         ),
         "parameters": {
             "type": "object",
@@ -43,13 +44,14 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "type": "function",
         "name": "get_destination_context",
         "description": (
-            "Optionally retrieve concise Wikivoyage destination context. "
-            "An unavailable result is non-fatal."
+            "Optionally search local semantic vectors of Wikivoyage passages. "
+            "Use a query matching the traveler's interests and needs; returns up to "
+            "three relevant passages with source URLs. An unavailable result is non-fatal."
         ),
         "parameters": {
             "type": "object",
-            "properties": {"destination": {"type": "string"}},
-            "required": ["destination"],
+            "properties": {"destination": {"type": "string"}, "query": {"type": "string"}},
+            "required": ["destination", "query"],
             "additionalProperties": False,
         },
         "strict": True,
@@ -59,6 +61,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
 TOOL_REGISTRY: dict[str, Callable[..., Any]] = {
     "geocode_city": geocode_city,
     "find_nearby_pois": find_nearby_pois,
+    "search_pois": search_pois,
     "get_destination_context": get_destination_context,
 }
 

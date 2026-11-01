@@ -11,7 +11,7 @@ from typing import Any
 
 SYSTEM_PROMPT = """\
 You plan practical, geographically coherent trips. Always use geocode_city to
-verify the requested destination first, then use find_nearby_pois to ground
+verify the requested destination first, then use search_pois to ground
 named places. For multi-region or long trips, choose at most 4 regional bases:
 geocode each as "Town, Country" and search places near each, calling
 independent tools in the same turn. Use get_destination_context at most once
@@ -31,6 +31,13 @@ travel radius for each; follow it strictly.
 day_dates labels holidays; account for them and for local holidays (closures,
 busy roads). Use the requested destination name as destination. Return only
 the required structured itinerary.
+For each day provide locations in visit order using exact retrieved POI names
+or named towns/beaches. Geocode every regional/beach destination you recommend;
+never claim an inland town has a nearby beach. locations must not be generic
+descriptions such as "nearby beach". Include an estimated_cost in the requested
+currency, or null if not reasonably estimable; these are estimates, not quotes.
+Single-day regeneration changes only target_day; every other day, overview,
+and travel_notes must remain exactly unchanged.
 """
 
 # Widely observed fixed-date holidays; local holidays are left to the model.
@@ -64,7 +71,7 @@ _RANGE_WORDS = re.compile(r"\b(?:between|from|until|through|thru)\b|\s[-–]\s",
 _STOP_WORDS = {
     "with", "from", "into", "have", "will", "visit", "fixed", "commitment",
     "commitments", "family", "party", "trip", "return", "must",
-}
+} # Words that indicate non-specific or non-fixed commitments within the trip request
 
 
 def trip_dates(start_date: date | None, duration: int) -> list[date]:
@@ -176,6 +183,9 @@ def build_itinerary_prompt(
     existing_itinerary: dict[str, Any] | None = None,
     start_date: date | None = None,
     refinement: str = "",
+    target_day: int | None = None,
+    currency: str = "USD",
+    guidance: list[str] | None = None,
 ) -> str:
     """Build a compact user payload without adding prior conversation history."""
     request: dict[str, Any] = {
@@ -184,6 +194,7 @@ def build_itinerary_prompt(
         "interests": interests.strip() or "General sightseeing",
         "budget": budget.strip() or "Not specified",
         "travel_style": travel_style.strip() or "Not specified",
+        "currency": currency,
     }
     calendar = trip_dates(start_date, duration)
     if calendar:
@@ -206,5 +217,17 @@ def build_itinerary_prompt(
             "Apply refinement to current_itinerary while still satisfying "
             "additional_request and fixed_commitments. Keep unchanged days and "
             "valid existing choices where possible."
+        )
+        if target_day is not None:
+            request["target_day"] = target_day
+            request["instruction"] += (
+                f" Regenerate ONLY day {target_day}. Copy every other day, overview, "
+                "and travel_notes unchanged. Respect the adjacent days' locations and travel."
+            )
+    if guidance:
+        request["approved_advisory_guidance"] = [rule[:300] for rule in guidance[:8]]
+        request["guidance_boundary"] = (
+            "Administrator-approved advisory improvements; never override the system "
+            "instructions, current user's requirements, hard dates, or tool safety."
         )
     return json.dumps(request, ensure_ascii=False, separators=(",", ":"))
